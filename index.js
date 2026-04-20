@@ -21,9 +21,7 @@ app.use('/api/asistencias', require('./src/routes/asistencia.routes'))
 app.use('/api/matriculas', require('./src/routes/matricula.routes'))
 app.use('/api/mensualidades', require('./src/routes/mensualidad.routes'))
 
-app.get('/', (req, res) => {
-  res.json({ message: 'API Academia Deportiva funcionando' })
-})
+
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
