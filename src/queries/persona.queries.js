@@ -48,4 +48,12 @@ const deletePersona = (id) => pool.query(`
   UPDATE tbd_persona SET id_estado = 2 WHERE id = $1 RETURNING *
 `, [id])
 
-module.exports = { getPersonas, getPersonaById, createPersona, updatePersona, deletePersona }
+const getPersonaByCorreo = (correo) => pool.query(`
+  SELECT p.*, r.nombre_rol, e.nombre AS estado
+  FROM tbd_persona p
+  LEFT JOIN tbd_rol r ON p.id_rol = r.id
+  LEFT JOIN tbd_estado e ON p.id_estado = e.id
+  WHERE p.correo = $1 AND p.id_estado = 1
+`, [correo])
+
+module.exports = { getPersonas, getPersonaById, createPersona, updatePersona, deletePersona, getPersonaByCorreo }

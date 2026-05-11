@@ -48,4 +48,14 @@ const deletePersona = async (req, res) => {
   }
 }
 
-module.exports = { getPersonas, getPersonaById, createPersona, updatePersona, deletePersona }
+const getPersonaByCorreo = async (req, res) => {
+  try {
+    const { rows } = await q.getPersonaByCorreo(req.params.correo)
+    if (!rows.length) return res.status(404).json({ error: 'Persona no encontrada' })
+    res.json(rows[0])
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+module.exports = { getPersonas, getPersonaById, createPersona, updatePersona, deletePersona, getPersonaByCorreo }
