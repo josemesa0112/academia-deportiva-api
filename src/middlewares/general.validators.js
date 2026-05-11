@@ -59,11 +59,11 @@ const entrenamientoRules = [
     .notEmpty().withMessage('La categoría es obligatoria')
     .isInt({ min: 1 }).withMessage('El id de categoría debe ser un número válido'),
   body('hora_inicio')
-    .notEmpty().withMessage('La hora de inicio es obligatoria')
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('La hora debe tener formato HH:MM'),
+  .notEmpty().withMessage('La hora de inicio es obligatoria')
+  .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/).withMessage('La hora debe tener formato HH:MM'),
   body('hora_fin')
-    .notEmpty().withMessage('La hora de fin es obligatoria')
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('La hora debe tener formato HH:MM'),
+  .notEmpty().withMessage('La hora de fin es obligatoria')
+  .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/).withMessage('La hora debe tener formato HH:MM'),
   body('fecha')
     .notEmpty().withMessage('La fecha es obligatoria')
     .isDate().withMessage('La fecha debe tener formato YYYY-MM-DD'),
