@@ -48,4 +48,13 @@ const deleteDeportista = async (req, res) => {
   }
 }
 
-module.exports = { getDeportistas, getDeportistaById, createDeportista, updateDeportista, deleteDeportista }
+const getDeportistasByCategoria = async (req, res) => {
+  try {
+    const { rows } = await q.getDeportistasByCategoria(req.params.id_categoria)
+    res.json(rows)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+module.exports = { getDeportistas, getDeportistaById, createDeportista, updateDeportista, deleteDeportista, getDeportistasByCategoria }

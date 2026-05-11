@@ -54,4 +54,17 @@ const deleteDeportista = (id) => pool.query(`
   UPDATE tbd_deportista SET id_estado = 2 WHERE id = $1 RETURNING *
 `, [id])
 
-module.exports = { getDeportistas, getDeportistaById, createDeportista, updateDeportista, deleteDeportista }
+const getDeportistasByCategoria = (id_categoria) => pool.query(`
+  SELECT d.*,
+    p.nombre, p.apellido, p.numero_documento,
+    c.nombre AS categoria,
+    e.nombre AS estado
+  FROM tbd_deportista d
+  LEFT JOIN tbd_persona p ON d.id_persona = p.id
+  LEFT JOIN tbd_categoria c ON d.id_categoria = c.id
+  LEFT JOIN tbd_estado e ON d.id_estado = e.id
+  WHERE d.id_categoria = $1 AND d.id_estado = 1
+  ORDER BY p.apellido
+`, [id_categoria])
+
+module.exports = { getDeportistas, getDeportistaById, createDeportista, updateDeportista, deleteDeportista, getDeportistasByCategoria }
