@@ -2,7 +2,7 @@ const pool = require('../db')
 
 const getMatriculas = () => pool.query(`
   SELECT m.*,
-    p.nombre, p.apellido,
+    p.nombre, p.apellido, p.numero_documento,
     cat.nombre AS categoria,
     e.nombre AS estado
   FROM tbd_matricula m
@@ -15,7 +15,7 @@ const getMatriculas = () => pool.query(`
 
 const getMatriculaById = (id) => pool.query(`
   SELECT m.*,
-    p.nombre, p.apellido,
+    p.nombre, p.apellido, p.numero_documento,
     cat.nombre AS categoria,
     e.nombre AS estado
   FROM tbd_matricula m

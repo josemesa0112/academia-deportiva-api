@@ -2,22 +2,26 @@ const pool = require('../db')
 
 const getMensualidades = () => pool.query(`
   SELECT mn.*,
-    p.nombre, p.apellido,
+    p.nombre, p.apellido, p.numero_documento,
+    cat.nombre AS categoria,
     e.nombre AS estado
   FROM tbd_mensualidad mn
   LEFT JOIN tbd_deportista d ON mn.id_deportista = d.id
   LEFT JOIN tbd_persona p ON d.id_persona = p.id
+  LEFT JOIN tbd_categoria cat ON d.id_categoria = cat.id
   LEFT JOIN tbd_estado e ON mn.id_estado = e.id
   ORDER BY mn.año DESC, mn.mes DESC
 `)
 
 const getMensualidadById = (id) => pool.query(`
   SELECT mn.*,
-    p.nombre, p.apellido,
+    p.nombre, p.apellido, p.numero_documento,
+    cat.nombre AS categoria,
     e.nombre AS estado
   FROM tbd_mensualidad mn
   LEFT JOIN tbd_deportista d ON mn.id_deportista = d.id
   LEFT JOIN tbd_persona p ON d.id_persona = p.id
+  LEFT JOIN tbd_categoria cat ON d.id_categoria = cat.id
   LEFT JOIN tbd_estado e ON mn.id_estado = e.id
   WHERE mn.id = $1
 `, [id])
