@@ -52,7 +52,34 @@ const deleteMensualidad = (id) => pool.query(`
   UPDATE tbd_mensualidad SET id_estado = 2 WHERE id = $1 RETURNING *
 `, [id])
 
+// Marca una mensualidad como pagada (idempotente: si ya estaba pagada, no la toca)
+const marcarPagada = (id) => pool.query(`
+  UPDATE tbd_mensualidad
+  SET fecha_pago = NOW()
+  WHERE id = $1 AND fecha_pago IS NULL
+  RETURNING *
+`, [id])
+
+// Genera mensualidades del mes indicado para todos los deportistas activos con valor_mensualidad.
+// Idempotente gracias al UNIQUE INDEX (id_deportista, mes, año): los duplicados se ignoran.
+const generarMensualidadesDelMes = (mes, año) => pool.query(`
+  INSERT INTO tbd_mensualidad (id_deportista, mes, año, valor, id_estado, fecha_pago)
+  SELECT d.id, $1, $2, d.valor_mensualidad, 1, NULL
+  FROM tbd_deportista d
+  WHERE d.id_estado = 1
+    AND d.valor_mensualidad IS NOT NULL
+    AND d.valor_mensualidad > 0
+  ON CONFLICT (id_deportista, mes, año) DO NOTHING
+  RETURNING *
+`, [mes, año])
+
 module.exports = {
-  getMensualidades, getMensualidadById, getMensualidadesByDeportista,
-  createMensualidad, updateMensualidad, deleteMensualidad
+  getMensualidades,
+  getMensualidadById,
+  getMensualidadesByDeportista,
+  createMensualidad,
+  updateMensualidad,
+  deleteMensualidad,
+  marcarPagada,
+  generarMensualidadesDelMes,
 }
