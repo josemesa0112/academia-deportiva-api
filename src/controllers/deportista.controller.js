@@ -10,6 +10,46 @@ const parsePosiciones = (val) => {
     .filter(n => Number.isInteger(n) && n > 0)
 }
 
+// Calcula el IMC desde peso y estatura. Retorna null si faltan datos.
+const calcularIMC = (peso, estatura) => {
+  const p = Number(peso)
+  const e = Number(estatura)
+  if (!p || !e) return null
+  return p / (e * e)
+}
+
+// Determina la clasificación según el IMC (criterios OMS).
+//   IMC < 18.5         → Bajo en grasa
+//   18.5 ≤ IMC < 25    → Saludable
+//   IMC ≥ 25           → Sobrepeso
+const nombreClasificacionPorIMC = (imc) => {
+  if (imc === null || imc === undefined || Number.isNaN(imc)) return null
+  if (imc < 18.5) return 'bajo en grasa'
+  if (imc < 25) return 'saludable'
+  return 'sobrepeso'
+}
+
+// Busca el id de clasificación en el catálogo por nombre (case-insensitive).
+const buscarIdClasificacion = async (client, nombre) => {
+  if (!nombre) return null
+  const { rows } = await client.query(
+    `SELECT id FROM tbd_clasificacion WHERE LOWER(TRIM(nombre)) = $1 LIMIT 1`,
+    [nombre]
+  )
+  return rows.length > 0 ? rows[0].id : null
+}
+
+// Sobrescribe IMC_actual e id_clasificacion en el body según peso/estatura.
+// Es la fuente única de verdad: lo que envíe el cliente para estos campos se ignora.
+const aplicarClasificacionAuto = async (client, body) => {
+  const imc = calcularIMC(body.peso_actual, body.estatura_actual)
+  if (imc === null) return // no se puede calcular sin peso/estatura
+  body.IMC_actual = imc.toFixed(2)
+  const nombre = nombreClasificacionPorIMC(imc)
+  const id = await buscarIdClasificacion(client, nombre)
+  if (id) body.id_clasificacion = id
+}
+
 // Compara dos snapshots de medidas y retorna true si alguna cambió
 const medidasCambiaron = (prev, next) => {
   const keys = ['peso_actual', 'estatura_actual', 'imc_actual', 'porcentaje_grasa_actual']
@@ -81,6 +121,9 @@ const createDeportista = async (req, res) => {
   try {
     await client.query('BEGIN')
 
+    // Deriva IMC + clasificación a partir de peso/estatura (sobrescribe lo que envíe el cliente)
+    await aplicarClasificacionAuto(client, req.body)
+
     const { rows } = await q.createDeportistaRow(req.body, client)
     const deportista = rows[0]
 
@@ -114,6 +157,9 @@ const updateDeportista = async (req, res) => {
       return res.status(404).json({ error: 'Deportista no encontrado' })
     }
     const previas = snapshotRows[0]
+
+    // Deriva IMC + clasificación a partir de peso/estatura (sobrescribe lo que envíe el cliente)
+    await aplicarClasificacionAuto(client, req.body)
 
     const { rows } = await q.updateDeportistaRow(req.params.id, req.body, client)
     const deportista = rows[0]
