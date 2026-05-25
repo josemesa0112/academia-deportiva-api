@@ -55,7 +55,15 @@ const deleteMatricula = (id) => pool.query(`
   UPDATE tbd_matricula SET id_estado = 2 WHERE id = $1 RETURNING *
 `, [id])
 
+// Marca una matrícula como pagada (idempotente: si ya estaba pagada, no la toca)
+const marcarPagada = (id) => pool.query(`
+  UPDATE tbd_matricula
+  SET fecha_pago = NOW()
+  WHERE id = $1 AND fecha_pago IS NULL
+  RETURNING *
+`, [id])
+
 module.exports = {
   getMatriculas, getMatriculaById, getMatriculasByDeportista,
-  createMatricula, updateMatricula, deleteMatricula
+  createMatricula, updateMatricula, deleteMatricula, marcarPagada
 }

@@ -57,7 +57,19 @@ const deleteMatricula = async (req, res) => {
   }
 }
 
+const pagarMatricula = async (req, res) => {
+  try {
+    const { rows } = await q.marcarPagada(req.params.id)
+    if (!rows.length) {
+      return res.status(409).json({ error: 'La matrícula no existe o ya fue pagada' })
+    }
+    res.json({ message: 'Pago registrado correctamente', data: rows[0] })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
 module.exports = {
   getMatriculas, getMatriculaById, getMatriculasByDeportista,
-  createMatricula, updateMatricula, deleteMatricula
+  createMatricula, updateMatricula, deleteMatricula, pagarMatricula
 }
