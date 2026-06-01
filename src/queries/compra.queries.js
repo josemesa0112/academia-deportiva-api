@@ -24,13 +24,14 @@ const getCompraById = (id) => pool.query(`
   WHERE c.id = $1
 `, [id])
 
-const createCompra = (data) => pool.query(`
+// runner: permite ejecutar dentro de una transacción
+const createCompraRow = (data, runner = pool) => runner.query(`
   INSERT INTO tbd_compra (id_proveedor, total_compra, fecha_compra, id_estado)
   VALUES ($1, $2, $3, $4)
   RETURNING *
 `, [data.id_proveedor, data.total_compra, data.fecha_compra, data.id_estado])
 
-const updateCompra = (id, data) => pool.query(`
+const updateCompraRow = (id, data, runner = pool) => runner.query(`
   UPDATE tbd_compra SET
     id_proveedor = $1, total_compra = $2,
     fecha_compra = $3, id_estado = $4
@@ -42,4 +43,10 @@ const deleteCompra = (id) => pool.query(`
   UPDATE tbd_compra SET id_estado = 2 WHERE id = $1 RETURNING *
 `, [id])
 
-module.exports = { getCompras, getCompraById, createCompra, updateCompra, deleteCompra }
+module.exports = {
+  getCompras,
+  getCompraById,
+  createCompraRow,
+  updateCompraRow,
+  deleteCompra,
+}
