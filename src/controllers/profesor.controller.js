@@ -1,5 +1,13 @@
 const q = require('../queries/profesor.queries')
 
+// Traduce errores de PostgreSQL a respuestas HTTP claras
+const handleDbError = (err, res) => {
+  if (err.code === '23505' && err.constraint === 'uniq_profesor_id_persona') {
+    return res.status(409).json({ error: 'Esta persona ya está registrada como profesor' })
+  }
+  return res.status(500).json({ error: err.message })
+}
+
 const getProfesores = async (req, res) => {
   try {
     const { rows } = await q.getProfesores()
@@ -24,7 +32,7 @@ const createProfesor = async (req, res) => {
     const { rows } = await q.createProfesor(req.body)
     res.status(201).json(rows[0])
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    handleDbError(err, res)
   }
 }
 
@@ -34,7 +42,7 @@ const updateProfesor = async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Profesor no encontrado' })
     res.json(rows[0])
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    handleDbError(err, res)
   }
 }
 

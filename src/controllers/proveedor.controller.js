@@ -1,6 +1,15 @@
 const pool = require('../db')
 const q = require('../queries/proveedor.queries')
 
+// Traduce errores de PostgreSQL a respuestas HTTP claras
+const handleDbError = (err, res) => {
+  // 23505 = unique_violation
+  if (err.code === '23505' && err.constraint === 'uniq_proveedor_id_persona') {
+    return res.status(409).json({ error: 'Esta persona ya está registrada como proveedor' })
+  }
+  return res.status(500).json({ error: err.message })
+}
+
 // Convierte "1,2,3" o [1,2,3] en [1, 2, 3]
 const parseProductos = (val) => {
   if (val === null || val === undefined || val === '') return []
@@ -76,7 +85,7 @@ const createProveedor = async (req, res) => {
     res.status(201).json(proveedor)
   } catch (err) {
     await client.query('ROLLBACK')
-    res.status(500).json({ error: err.message })
+    handleDbError(err, res)
   } finally {
     client.release()
   }
@@ -104,7 +113,7 @@ const updateProveedor = async (req, res) => {
     res.json(proveedor)
   } catch (err) {
     await client.query('ROLLBACK')
-    res.status(500).json({ error: err.message })
+    handleDbError(err, res)
   } finally {
     client.release()
   }

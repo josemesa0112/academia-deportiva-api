@@ -1,6 +1,14 @@
 const pool = require('../db')
 const q = require('../queries/deportista.queries')
 
+// Traduce errores de PostgreSQL a respuestas HTTP claras
+const handleDbError = (err, res) => {
+  if (err.code === '23505' && err.constraint === 'uniq_deportista_id_persona') {
+    return res.status(409).json({ error: 'Esta persona ya está registrada como deportista' })
+  }
+  return res.status(500).json({ error: err.message })
+}
+
 // Convierte "1,2,3" o [1,2,3] o "1, 2" en [1, 2, 3]
 const parsePosiciones = (val) => {
   if (val === null || val === undefined || val === '') return []
@@ -139,7 +147,7 @@ const createDeportista = async (req, res) => {
     res.status(201).json(deportista)
   } catch (err) {
     await client.query('ROLLBACK')
-    res.status(500).json({ error: err.message })
+    handleDbError(err, res)
   } finally {
     client.release()
   }
@@ -178,7 +186,7 @@ const updateDeportista = async (req, res) => {
     res.json(deportista)
   } catch (err) {
     await client.query('ROLLBACK')
-    res.status(500).json({ error: err.message })
+    handleDbError(err, res)
   } finally {
     client.release()
   }
