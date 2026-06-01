@@ -5,7 +5,7 @@ const getProveedores = () => pool.query(`
     p.nombre, p.apellido, p.correo, p.numero_telefono, p.numero_documento,
     e.nombre AS estado,
     COALESCE(
-      (SELECT json_agg(json_build_object('id', pr.id, 'nombre', pr.nombre_producto) ORDER BY pr.nombre_producto)
+      (SELECT json_agg(json_build_object('id', pr.id, 'nombre', pr.nombre_producto, 'precio', pr.precio_producto) ORDER BY pr.nombre_producto)
        FROM tbd_proveedor_x_producto pxp
        JOIN tbd_producto pr ON pr.id = pxp.id_producto
        WHERE pxp.id_proveedor = pv.id),
@@ -22,7 +22,7 @@ const getProveedorById = (id) => pool.query(`
     p.nombre, p.apellido, p.correo, p.numero_telefono, p.numero_documento,
     e.nombre AS estado,
     COALESCE(
-      (SELECT json_agg(json_build_object('id', pr.id, 'nombre', pr.nombre_producto) ORDER BY pr.nombre_producto)
+      (SELECT json_agg(json_build_object('id', pr.id, 'nombre', pr.nombre_producto, 'precio', pr.precio_producto) ORDER BY pr.nombre_producto)
        FROM tbd_proveedor_x_producto pxp
        JOIN tbd_producto pr ON pr.id = pxp.id_producto
        WHERE pxp.id_proveedor = pv.id),
