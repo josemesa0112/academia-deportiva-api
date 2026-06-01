@@ -1,13 +1,28 @@
 const { body } = require('express-validator')
 const pool = require('../db')
 
+// Detecta si el body indica una empresa (acepta true/'true'/1)
+const esEmpresa = (req) =>
+  req.body?.es_empresa === true ||
+  req.body?.es_empresa === 'true' ||
+  req.body?.es_empresa === 1 ||
+  req.body?.es_empresa === '1'
+
 const personaRules = [
+  // Nombre: obligatorio siempre. Para personas naturales se exige solo letras;
+  // para empresas se permite cualquier caracter (razón social puede tener
+  // puntos, números, "S.A.S.", etc.).
   body('nombre')
     .trim().notEmpty().withMessage('El nombre es obligatorio')
-    .isAlpha('es-ES', { ignore: ' ' }).withMessage('El nombre solo debe contener letras')
     .isLength({ max: 150 }).withMessage('El nombre no puede superar 150 caracteres'),
 
+  body('nombre')
+    .if((_v, { req }) => !esEmpresa(req))
+    .isAlpha('es-ES', { ignore: ' ' }).withMessage('El nombre solo debe contener letras'),
+
+  // Apellido: solo obligatorio para personas naturales
   body('apellido')
+    .if((_v, { req }) => !esEmpresa(req))
     .trim().notEmpty().withMessage('El apellido es obligatorio')
     .isAlpha('es-ES', { ignore: ' ' }).withMessage('El apellido solo debe contener letras')
     .isLength({ max: 150 }).withMessage('El apellido no puede superar 150 caracteres'),
@@ -17,6 +32,7 @@ const personaRules = [
     .isEmail().withMessage('El correo no tiene un formato válido')
     .isLength({ max: 200 }).withMessage('El correo no puede superar 200 caracteres'),
 
+  // Fecha de nacimiento: opcional siempre, pero ignorada si es empresa
   body('fecha_nacimiento')
     .optional({ nullable: true, checkFalsy: true })
     .isDate().withMessage('La fecha de nacimiento debe tener formato YYYY-MM-DD'),
@@ -33,7 +49,9 @@ const personaRules = [
     .notEmpty().withMessage('El rol es obligatorio')
     .isInt({ min: 1 }).withMessage('El rol debe ser un número válido'),
 
+  // Género: solo obligatorio para personas naturales
   body('id_genero')
+    .if((_v, { req }) => !esEmpresa(req))
     .notEmpty().withMessage('El género es obligatorio')
     .isInt({ min: 1 }).withMessage('El género debe ser un número válido'),
 
