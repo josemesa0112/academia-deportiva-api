@@ -9,7 +9,9 @@ const getMensualidades = async (req, res) => {
     const añoActual = ahora.getFullYear()
     await q.generarMensualidadesDelMes(mesActual, añoActual)
 
-    const { rows } = await q.getMensualidades()
+    // Solo devolvemos las del mes actual. El historial completo de cada
+    // deportista vive en /api/mensualidades/deportista/:id (perfil).
+    const { rows } = await q.getMensualidades(mesActual, añoActual)
     res.json(rows)
   } catch (err) {
     res.status(500).json({ error: err.message })

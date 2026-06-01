@@ -1,6 +1,9 @@
 const pool = require('../db')
 
-const getMensualidades = () => pool.query(`
+// Por defecto solo trae las mensualidades del mes/año pasados como parámetros
+// (típicamente el mes actual). El historial completo por deportista se consulta
+// vía /api/mensualidades/deportista/:id desde el perfil.
+const getMensualidades = (mes, año) => pool.query(`
   SELECT mn.*,
     p.nombre, p.apellido, p.numero_documento,
     cat.nombre AS categoria,
@@ -10,8 +13,9 @@ const getMensualidades = () => pool.query(`
   LEFT JOIN tbd_persona p ON d.id_persona = p.id
   LEFT JOIN tbd_categoria cat ON d.id_categoria = cat.id
   LEFT JOIN tbd_estado e ON mn.id_estado = e.id
-  ORDER BY mn.año DESC, mn.mes DESC
-`)
+  WHERE mn.mes = $1 AND mn.año = $2
+  ORDER BY p.apellido, p.nombre
+`, [mes, año])
 
 const getMensualidadById = (id) => pool.query(`
   SELECT mn.*,
