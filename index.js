@@ -1,13 +1,22 @@
 const express = require('express')
 const cors = require('cors')
+const compression = require('compression')
 require('dotenv').config()
 require('./src/db')
 
 const app = express()
 
+app.use(compression())
 app.use(cors())
 app.use(express.json())
 app.use(express.static('public'))
+
+// Health endpoint para warm-up (UptimeRobot / GitHub Actions / etc.)
+// Respuesta liviana sin tocar DB — solo confirma que el proceso responde.
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() })
+})
+
 app.use('/api/catalogos', require('./src/routes/catalogos.routes'))
 app.use('/api/personas', require('./src/routes/persona.routes'))
 app.use('/api/profesores', require('./src/routes/profesor.routes'))
