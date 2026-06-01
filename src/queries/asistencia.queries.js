@@ -3,31 +3,35 @@ const pool = require('../db')
 const getAsistencias = () => pool.query(`
   SELECT a.*,
     d.id AS deportista_id,
-    p.nombre, p.apellido,
+    p.nombre, p.apellido, p.numero_documento,
     en.fecha, en.hora_inicio, en.hora_fin,
     ca.nombre AS cancha,
+    cat.nombre AS categoria,
     e.nombre AS estado
   FROM tbd_asistencia a
   LEFT JOIN tbd_deportista d ON a.id_deportista = d.id
   LEFT JOIN tbd_persona p ON d.id_persona = p.id
   LEFT JOIN tbd_entrenamiento en ON a.id_entrenamiento = en.id
   LEFT JOIN tbd_cancha ca ON en.id_cancha = ca.id
+  LEFT JOIN tbd_categoria cat ON en.id_categoria = cat.id
   LEFT JOIN tbd_estado e ON a.id_estado = e.id
-  ORDER BY a.id
+  ORDER BY en.fecha DESC, en.hora_inicio DESC, a.id
 `)
 
 const getAsistenciaById = (id) => pool.query(`
   SELECT a.*,
     d.id AS deportista_id,
-    p.nombre, p.apellido,
+    p.nombre, p.apellido, p.numero_documento,
     en.fecha, en.hora_inicio, en.hora_fin,
     ca.nombre AS cancha,
+    cat.nombre AS categoria,
     e.nombre AS estado
   FROM tbd_asistencia a
   LEFT JOIN tbd_deportista d ON a.id_deportista = d.id
   LEFT JOIN tbd_persona p ON d.id_persona = p.id
   LEFT JOIN tbd_entrenamiento en ON a.id_entrenamiento = en.id
   LEFT JOIN tbd_cancha ca ON en.id_cancha = ca.id
+  LEFT JOIN tbd_categoria cat ON en.id_categoria = cat.id
   LEFT JOIN tbd_estado e ON a.id_estado = e.id
   WHERE a.id = $1
 `, [id])
