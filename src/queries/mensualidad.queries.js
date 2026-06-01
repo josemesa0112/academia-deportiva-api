@@ -64,6 +64,14 @@ const marcarPagada = (id) => pool.query(`
   RETURNING *
 `, [id])
 
+// Revierte el pago: vuelve fecha_pago a NULL. Solo aplica si estaba pagada.
+const revertirPago = (id) => pool.query(`
+  UPDATE tbd_mensualidad
+  SET fecha_pago = NULL
+  WHERE id = $1 AND fecha_pago IS NOT NULL
+  RETURNING *
+`, [id])
+
 // Genera mensualidades del mes indicado para todos los deportistas activos con valor_mensualidad.
 // Idempotente gracias al UNIQUE INDEX (id_deportista, mes, año): los duplicados se ignoran.
 const generarMensualidadesDelMes = (mes, año) => pool.query(`
@@ -85,5 +93,6 @@ module.exports = {
   updateMensualidad,
   deleteMensualidad,
   marcarPagada,
+  revertirPago,
   generarMensualidadesDelMes,
 }

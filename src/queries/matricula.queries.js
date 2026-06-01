@@ -63,7 +63,15 @@ const marcarPagada = (id) => pool.query(`
   RETURNING *
 `, [id])
 
+// Revierte el pago: vuelve fecha_pago a NULL. Solo aplica si estaba pagada.
+const revertirPago = (id) => pool.query(`
+  UPDATE tbd_matricula
+  SET fecha_pago = NULL
+  WHERE id = $1 AND fecha_pago IS NOT NULL
+  RETURNING *
+`, [id])
+
 module.exports = {
   getMatriculas, getMatriculaById, getMatriculasByDeportista,
-  createMatricula, updateMatricula, deleteMatricula, marcarPagada
+  createMatricula, updateMatricula, deleteMatricula, marcarPagada, revertirPago
 }

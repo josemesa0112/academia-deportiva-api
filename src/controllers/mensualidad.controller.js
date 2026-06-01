@@ -78,6 +78,18 @@ const pagarMensualidad = async (req, res) => {
   }
 }
 
+const revertirPagoMensualidad = async (req, res) => {
+  try {
+    const { rows } = await q.revertirPago(req.params.id)
+    if (!rows.length) {
+      return res.status(409).json({ error: 'La mensualidad no existe o no estaba pagada' })
+    }
+    res.json({ message: 'Pago revertido correctamente', data: rows[0] })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
 const generarMes = async (req, res) => {
   try {
     const ahora = new Date()
@@ -112,5 +124,6 @@ module.exports = {
   updateMensualidad,
   deleteMensualidad,
   pagarMensualidad,
+  revertirPagoMensualidad,
   generarMes,
 }
