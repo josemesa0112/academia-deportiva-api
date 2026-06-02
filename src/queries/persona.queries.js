@@ -89,10 +89,9 @@ const deactivateDerivedByPersona = (id_persona, runner = pool) => Promise.all([
 ])
 
 // Devuelve la persona y, según el rol:
-//   - Profesor (r.id = 2): array `profesor_categorias` con sus categorías.
-//   - Deportista (r.id = 3): objeto `deportista_info` con su id, id_categoria
-//     y nombre de categoría — el frontend lo usa para filtros y para
-//     redirigir "Mi Perfil" a /deportistas/:id automáticamente.
+//   - Profesor (r.id = 2): `profesor_categorias` con sus categorías a cargo
+//     + `profesor_info` con su id (usado para redirigir "Mi Perfil").
+//   - Deportista (r.id = 3): `deportista_info` con id, id_categoria y nombre.
 const getPersonaByCorreo = (correo) => pool.query(`
   SELECT p.*, r.nombre_rol, e.nombre AS estado,
     CASE WHEN r.id = 2 THEN (
@@ -105,6 +104,12 @@ const getPersonaByCorreo = (correo) => pool.query(`
       JOIN tbd_categoria cat ON cat.id = pxc.id_categoria
       WHERE pr.id_persona = p.id
     ) END AS profesor_categorias,
+    CASE WHEN r.id = 2 THEN (
+      SELECT json_build_object('id', pr.id)
+      FROM tbd_profesor pr
+      WHERE pr.id_persona = p.id
+      LIMIT 1
+    ) END AS profesor_info,
     CASE WHEN r.id = 3 THEN (
       SELECT json_build_object(
         'id', d.id,
