@@ -71,7 +71,39 @@ const revertirPago = (id) => pool.query(`
   RETURNING *
 `, [id])
 
+// Genera una matrícula del año para cada deportista activo que aún no tenga
+// una matrícula en ese año. Idempotente: si ya la tiene, se omite.
+// El valor se infiere del histórico de matrículas de la misma categoría;
+// si no hay historial, se usa el valor_mensualidad del deportista; si tampoco,
+// queda en 0 (el admin debe editarla).
+const generarMatriculasDelAño = (año) => pool.query(`
+  INSERT INTO tbd_matricula (id_deportista, fecha_inicio, valor, id_categoria, id_estado, fecha_pago)
+  SELECT
+    d.id,
+    CURRENT_DATE,
+    COALESCE(
+      (SELECT m2.valor FROM tbd_matricula m2
+       WHERE m2.id_categoria = d.id_categoria
+       ORDER BY m2.fecha_inicio DESC LIMIT 1),
+      d.valor_mensualidad,
+      0
+    )::NUMERIC,
+    d.id_categoria,
+    1,
+    NULL
+  FROM tbd_deportista d
+  WHERE d.id_estado = 1
+    AND d.id_categoria IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM tbd_matricula m
+      WHERE m.id_deportista = d.id
+        AND EXTRACT(YEAR FROM m.fecha_inicio) = $1
+    )
+  RETURNING *
+`, [año])
+
 module.exports = {
   getMatriculas, getMatriculaById, getMatriculasByDeportista,
-  createMatricula, updateMatricula, deleteMatricula, marcarPagada, revertirPago
+  createMatricula, updateMatricula, deleteMatricula,
+  marcarPagada, revertirPago, generarMatriculasDelAño
 }

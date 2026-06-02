@@ -5,6 +5,7 @@ const validate = require('../middlewares/validate')
 
 router.get('/', c.getMatriculas)
 router.get('/deportista/:id_deportista', c.getMatriculasByDeportista)
+router.post('/generar-anio', c.generarAño)
 router.post('/:id/pagar', c.pagarMatricula)
 router.post('/:id/revertir-pago', c.revertirPagoMatricula)
 router.get('/:id', c.getMatriculaById)

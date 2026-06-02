@@ -81,7 +81,29 @@ const revertirPagoMatricula = async (req, res) => {
   }
 }
 
+const generarAño = async (req, res) => {
+  try {
+    const ahora = new Date()
+    const año = req.body?.año ? Number(req.body.año) : ahora.getFullYear()
+    if (!Number.isInteger(año) || año < 2000) {
+      return res.status(400).json({ error: 'Año inválido' })
+    }
+    const { rows } = await q.generarMatriculasDelAño(año)
+    res.json({
+      message: rows.length === 0
+        ? `No se crearon matrículas nuevas. Todos los deportistas activos ya tienen matrícula para ${año}.`
+        : `Se generaron ${rows.length} matrícula${rows.length === 1 ? '' : 's'} para ${año}.`,
+      creadas: rows.length,
+      año,
+      data: rows,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
 module.exports = {
   getMatriculas, getMatriculaById, getMatriculasByDeportista,
-  createMatricula, updateMatricula, deleteMatricula, pagarMatricula, revertirPagoMatricula
+  createMatricula, updateMatricula, deleteMatricula,
+  pagarMatricula, revertirPagoMatricula, generarAño
 }
