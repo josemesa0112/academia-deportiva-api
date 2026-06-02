@@ -63,29 +63,27 @@ const personaRules = [
     .notEmpty().withMessage('El estado es obligatorio')
     .isInt({ min: 1 }).withMessage('El estado debe ser un número válido'),
 
-  // Validación: documento único por tipo
+  // Validación: documento único globalmente (sin importar el tipo de documento).
+  // Reemplaza la validación anterior por tipo+número y también la de "un solo
+  // rol por persona", porque si el documento es único entonces no puede haber
+  // dos personas con el mismo documento bajo ningún rol.
   body('numero_documento').custom(async (value, { req }) => {
     const id = req.params?.id
-    const { id_tipo_documento } = req.body
     const query = id
-      ? 'SELECT id FROM tbd_persona WHERE numero_documento = $1 AND id_tipo_documento = $2 AND id != $3'
-      : 'SELECT id FROM tbd_persona WHERE numero_documento = $1 AND id_tipo_documento = $2'
-    const params = id ? [value, id_tipo_documento, id] : [value, id_tipo_documento]
+      ? `SELECT p.id, r.nombre_rol
+         FROM tbd_persona p
+         LEFT JOIN tbd_rol r ON r.id = p.id_rol
+         WHERE p.numero_documento = $1 AND p.id != $2`
+      : `SELECT p.id, r.nombre_rol
+         FROM tbd_persona p
+         LEFT JOIN tbd_rol r ON r.id = p.id_rol
+         WHERE p.numero_documento = $1`
+    const params = id ? [value, id] : [value]
     const { rows } = await pool.query(query, params)
-    if (rows.length > 0) throw new Error('Ya existe una persona con ese tipo y número de documento')
-    return true
-  }),
-
-  // Validación: un solo rol por persona
-  body('id_rol').custom(async (value, { req }) => {
-    const id = req.params?.id
-    const query = id
-      ? 'SELECT id FROM tbd_persona WHERE id_rol = $1 AND numero_documento = $2 AND id != $3'
-      : 'SELECT id FROM tbd_persona WHERE id_rol = $1 AND numero_documento = $2'
-    const { numero_documento } = req.body
-    const params = id ? [value, numero_documento, id] : [value, numero_documento]
-    const { rows } = await pool.query(query, params)
-    if (rows.length > 0) throw new Error('Esta persona ya tiene un rol asignado en el sistema')
+    if (rows.length > 0) {
+      const rol = rows[0].nombre_rol ? ` (registrada como ${rows[0].nombre_rol})` : ''
+      throw new Error(`Ya existe una persona con ese número de documento${rol}.`)
+    }
     return true
   })
 ]
