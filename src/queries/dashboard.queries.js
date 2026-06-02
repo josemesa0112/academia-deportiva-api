@@ -24,6 +24,16 @@ const getPendienteMes = (mes, año) => pool.query(`
   WHERE mes = $1 AND año = $2 AND fecha_pago IS NULL
 `, [mes, año])
 
+// Matrículas pendientes (TODAS sin pagar, sin filtro de mes — una
+// matrícula vieja sin pagar sigue siendo dinero por cobrar).
+const getMatriculasPendientesTotal = () => pool.query(`
+  SELECT
+    COALESCE(SUM(valor), 0)::DECIMAL AS pendiente,
+    COUNT(*)::INT AS cantidad_pendientes
+  FROM tbd_matricula
+  WHERE fecha_pago IS NULL
+`)
+
 // Gastos del mes (compras del periodo)
 const getGastosMes = (mes, año) => pool.query(`
   SELECT
@@ -133,6 +143,7 @@ const getProximosEntrenamientos = () => pool.query(`
 module.exports = {
   getRecaudoMes,
   getPendienteMes,
+  getMatriculasPendientesTotal,
   getGastosMes,
   getRecaudacionHistorica,
   getDeportistasPorCategoria,
