@@ -17,6 +17,7 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() })
 })
 
+app.use('/api/dashboard', require('./src/routes/dashboard.routes'))
 app.use('/api/catalogos', require('./src/routes/catalogos.routes'))
 app.use('/api/personas', require('./src/routes/persona.routes'))
 app.use('/api/profesores', require('./src/routes/profesor.routes'))
