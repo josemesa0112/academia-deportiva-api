@@ -80,7 +80,8 @@ const getResumen = async (req, res) => {
       proximos_entrenamientos: proximos.rows,
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    console.error('[dashboard/resumen] error:', err)
+    res.status(500).json({ error: err.message, stack: err.stack })
   }
 }
 

@@ -34,13 +34,21 @@ const getGastosMes = (mes, año) => pool.query(`
     AND EXTRACT(YEAR FROM fecha_compra) = $2
 `, [mes, año])
 
-// Recaudación de los últimos 6 meses (para gráfica de barras)
+// Recaudación de los últimos 6 meses (para gráfica de barras).
+// Usamos multiplicación de INTERVAL para evitar concatenar int+text
+// (que falla en algunas versiones de PostgreSQL).
 const getRecaudacionHistorica = () => pool.query(`
   WITH meses AS (
-    SELECT TO_CHAR(date_trunc('month', CURRENT_DATE) - (n || ' months')::INTERVAL, 'YYYY-MM') AS periodo,
-           EXTRACT(MONTH FROM date_trunc('month', CURRENT_DATE) - (n || ' months')::INTERVAL)::INT AS mes,
-           EXTRACT(YEAR FROM date_trunc('month', CURRENT_DATE) - (n || ' months')::INTERVAL)::INT AS año
+    SELECT
+      (date_trunc('month', CURRENT_DATE) - (INTERVAL '1 month' * n))::DATE AS fecha_mes
     FROM generate_series(0, 5) AS n
+  ),
+  meses_expandidos AS (
+    SELECT
+      TO_CHAR(fecha_mes, 'YYYY-MM') AS periodo,
+      EXTRACT(MONTH FROM fecha_mes)::INT AS mes,
+      EXTRACT(YEAR FROM fecha_mes)::INT AS año
+    FROM meses
   )
   SELECT
     m.periodo,
@@ -56,7 +64,7 @@ const getRecaudacionHistorica = () => pool.query(`
         AND EXTRACT(MONTH FROM mt.fecha_pago) = m.mes
         AND EXTRACT(YEAR FROM mt.fecha_pago) = m.año
     ), 0)::DECIMAL AS recaudo_matriculas
-  FROM meses m
+  FROM meses_expandidos m
   ORDER BY m.año, m.mes
 `)
 
