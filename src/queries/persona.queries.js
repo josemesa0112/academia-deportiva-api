@@ -74,9 +74,19 @@ const updatePersona = (id, data) => {
   ])
 }
 
-const deletePersona = (id) => pool.query(`
+// runner permite ejecutar dentro de una transacción
+const deletePersonaRow = (id, runner = pool) => runner.query(`
   UPDATE tbd_persona SET id_estado = 2 WHERE id = $1 RETURNING *
 `, [id])
+
+// Soft delete cascade a los registros derivados de una persona.
+// Si la persona es deportista/profesor/proveedor, también queda inactivo
+// en su tabla derivada — así sale de listados, dropdowns y KPIs.
+const deactivateDerivedByPersona = (id_persona, runner = pool) => Promise.all([
+  runner.query(`UPDATE tbd_deportista  SET id_estado = 2 WHERE id_persona = $1 AND id_estado = 1`, [id_persona]),
+  runner.query(`UPDATE tbd_profesor    SET id_estado = 2 WHERE id_persona = $1 AND id_estado = 1`, [id_persona]),
+  runner.query(`UPDATE tbd_proveedores SET id_estado = 2 WHERE id_persona = $1 AND id_estado = 1`, [id_persona]),
+])
 
 // Devuelve la persona y, según el rol:
 //   - Profesor (r.id = 2): array `profesor_categorias` con sus categorías.
@@ -109,7 +119,10 @@ const getPersonaByCorreo = (correo) => pool.query(`
   FROM tbd_persona p
   LEFT JOIN tbd_rol r ON p.id_rol = r.id
   LEFT JOIN tbd_estado e ON p.id_estado = e.id
-  WHERE p.correo = $1 AND p.id_estado = 1
+  WHERE p.correo = $1
 `, [correo])
 
-module.exports = { getPersonas, getPersonaById, createPersona, updatePersona, deletePersona, getPersonaByCorreo }
+module.exports = {
+  getPersonas, getPersonaById, createPersona, updatePersona,
+  deletePersonaRow, deactivateDerivedByPersona, getPersonaByCorreo
+}

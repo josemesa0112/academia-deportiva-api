@@ -1,3 +1,4 @@
+const pool = require('../db')
 const q = require('../queries/persona.queries')
 
 // Traduce errores de PostgreSQL a respuestas HTTP claras. Red de seguridad
@@ -49,12 +50,30 @@ const updatePersona = async (req, res) => {
 }
 
 const deletePersona = async (req, res) => {
+  const client = await pool.connect()
   try {
-    const { rows } = await q.deletePersona(req.params.id)
-    if (!rows.length) return res.status(404).json({ error: 'Persona no encontrada' })
-    res.json({ message: 'Persona desactivada correctamente', data: rows[0] })
+    await client.query('BEGIN')
+
+    const { rows } = await q.deletePersonaRow(req.params.id, client)
+    if (!rows.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Persona no encontrada' })
+    }
+
+    // Cascade: si esta persona es deportista/profesor/proveedor, también
+    // quedan inactivos para que no aparezcan en listados, dropdowns ni KPIs.
+    await q.deactivateDerivedByPersona(req.params.id, client)
+
+    await client.query('COMMIT')
+    res.json({
+      message: 'Persona y sus roles asociados desactivados correctamente',
+      data: rows[0],
+    })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    await client.query('ROLLBACK')
+    handleDbError(err, res)
+  } finally {
+    client.release()
   }
 }
 
