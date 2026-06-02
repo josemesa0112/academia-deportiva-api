@@ -78,9 +78,11 @@ const deletePersona = (id) => pool.query(`
   UPDATE tbd_persona SET id_estado = 2 WHERE id = $1 RETURNING *
 `, [id])
 
-// Devuelve la persona junto con sus categorías asignadas si es Profesor.
-// Esto se usa en el login para que el frontend sepa de inmediato qué
-// categorías puede ver el profesor (filtra Deportistas, Entrenamientos, etc.).
+// Devuelve la persona y, según el rol:
+//   - Profesor (r.id = 2): array `profesor_categorias` con sus categorías.
+//   - Deportista (r.id = 3): objeto `deportista_info` con su id, id_categoria
+//     y nombre de categoría — el frontend lo usa para filtros y para
+//     redirigir "Mi Perfil" a /deportistas/:id automáticamente.
 const getPersonaByCorreo = (correo) => pool.query(`
   SELECT p.*, r.nombre_rol, e.nombre AS estado,
     CASE WHEN r.id = 2 THEN (
@@ -92,7 +94,18 @@ const getPersonaByCorreo = (correo) => pool.query(`
       JOIN tbd_profesor_x_categoria pxc ON pxc.id_profesor = pr.id
       JOIN tbd_categoria cat ON cat.id = pxc.id_categoria
       WHERE pr.id_persona = p.id
-    ) END AS profesor_categorias
+    ) END AS profesor_categorias,
+    CASE WHEN r.id = 3 THEN (
+      SELECT json_build_object(
+        'id', d.id,
+        'id_categoria', d.id_categoria,
+        'categoria', cat.nombre
+      )
+      FROM tbd_deportista d
+      LEFT JOIN tbd_categoria cat ON cat.id = d.id_categoria
+      WHERE d.id_persona = p.id
+      LIMIT 1
+    ) END AS deportista_info
   FROM tbd_persona p
   LEFT JOIN tbd_rol r ON p.id_rol = r.id
   LEFT JOIN tbd_estado e ON p.id_estado = e.id
