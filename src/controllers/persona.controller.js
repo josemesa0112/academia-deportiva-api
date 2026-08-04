@@ -79,6 +79,15 @@ const deletePersona = async (req, res) => {
 
 const getPersonaByCorreo = async (req, res) => {
   try {
+    // Solo se puede consultar el propio correo. El Administrador puede
+    // consultar cualquiera. Sin esta regla, cualquier usuario autenticado
+    // podría averiguar el rol de otros probando correos.
+    const solicitado = String(req.params.correo || '').toLowerCase()
+    const propio = String(req.persona?.correo || '').toLowerCase()
+    if (solicitado !== propio && req.persona?.id_rol !== 1) {
+      return res.status(403).json({ error: 'No tienes permiso para consultar este correo.' })
+    }
+
     const { rows } = await q.getPersonaByCorreo(req.params.correo)
     if (!rows.length) return res.status(404).json({ error: 'Persona no encontrada' })
     res.json(rows[0])

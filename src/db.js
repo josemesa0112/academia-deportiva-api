@@ -1,5 +1,6 @@
 const { Pool } = require('pg')
-require('dotenv').config()
+// Ver nota en index.js sobre override.
+require('dotenv').config({ override: true })
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
