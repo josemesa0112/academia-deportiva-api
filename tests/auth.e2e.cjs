@@ -1,13 +1,16 @@
 /**
- * Prueba de punta a punta del flujo de autenticación contra el API local.
+ * Prueba de punta a punta del flujo de autenticación.
  * Usa una persona real de la base, y al final DESHACE todo:
  * borra la cuenta de Auth creada y restaura debe_cambiar_password.
+ *
+ * Por defecto prueba el servidor local. Para apuntar al desplegado:
+ *   API_BASE=https://mi-api.onrender.com npm run test:auth
  */
 const { Pool } = require('pg')
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env'), override: true })
 const { admin, buscarUsuarioPorCorreo } = require('../src/lib/supabaseAdmin')
 
-const BASE = 'http://localhost:3000'
+const BASE = process.env.API_BASE || 'http://localhost:3000'
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
 
 let ok = 0, fail = 0
