@@ -12,6 +12,7 @@ router.get('/', c.getMensualidades)
 // Vista de grilla anual. Va antes de '/:id' para que 'anio' no se lea como id.
 router.get('/anio/:año', soloAdmin, c.getMatrizAnual)
 router.post('/marcar', soloAdmin, c.marcarPeriodo)
+router.post('/marcar-mes', soloAdmin, c.marcarMesCompleto)
 router.get('/deportista/:id_deportista', c.getMensualidadesByDeportista)
 router.post('/generar-mes', c.generarMes)
 router.post('/:id/pagar', c.pagarMensualidad)

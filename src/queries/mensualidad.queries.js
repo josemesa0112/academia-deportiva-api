@@ -154,7 +154,78 @@ const revertirPagoDePeriodo = (id_deportista, mes, año) => pool.query(`
   RETURNING *
 `, [id_deportista, mes, año])
 
+// --- Marcado masivo de un mes -------------------------------------------
+// `ids` acotan la operación a un subconjunto (lo que el admin tiene filtrado
+// en pantalla). Si viene null, aplica a todos los deportistas activos.
+
+// Cuántos del alcance ya están pagados. Sirve para informar cuántos cambiaron
+// de verdad, sin confundir "ya estaba pagado" con "lo acabo de pagar".
+const contarPagadasDelMes = (mes, año, ids, runner = pool) => runner.query(`
+  SELECT COUNT(*)::int AS pagadas
+  FROM tbd_mensualidad mn
+  JOIN tbd_deportista d ON d.id = mn.id_deportista
+  WHERE mn.mes = $1 AND mn.año = $2 AND mn.id_estado = 1
+    AND mn.fecha_pago IS NOT NULL
+    AND d.id_estado = 1
+    AND ($3::int[] IS NULL OR mn.id_deportista = ANY($3))
+`, [mes, año, ids])
+
+// Paso 1: marcar las mensualidades que ya existen, sin pisar la fecha de
+// las que ya estaban pagadas.
+const pagarExistentesDelMes = (mes, año, ids, runner = pool) => runner.query(`
+  UPDATE tbd_mensualidad mn
+  SET fecha_pago = NOW(), id_estado = 1
+  FROM tbd_deportista d
+  WHERE d.id = mn.id_deportista
+    AND mn.mes = $1 AND mn.año = $2
+    AND mn.fecha_pago IS NULL
+    AND d.id_estado = 1
+    AND ($3::int[] IS NULL OR mn.id_deportista = ANY($3))
+  RETURNING mn.id
+`, [mes, año, ids])
+
+// Paso 2: crear y pagar las que faltan. Solo aplica a deportistas con valor
+// de mensualidad definido: sin él no se puede crear una fila coherente.
+const crearYPagarFaltantesDelMes = (mes, año, ids, runner = pool) => runner.query(`
+  INSERT INTO tbd_mensualidad (id_deportista, mes, año, valor, id_estado, fecha_pago)
+  SELECT d.id, $1, $2, d.valor_mensualidad, 1, NOW()
+  FROM tbd_deportista d
+  WHERE d.id_estado = 1
+    AND d.valor_mensualidad IS NOT NULL
+    AND d.valor_mensualidad > 0
+    AND ($3::int[] IS NULL OR d.id = ANY($3))
+  ON CONFLICT (id_deportista, mes, año) DO NOTHING
+  RETURNING id
+`, [mes, año, ids])
+
+// Deportistas del alcance que quedaron fuera por no tener valor definido.
+const contarSinValorMensualidad = (ids, runner = pool) => runner.query(`
+  SELECT COUNT(*)::int AS sin_valor
+  FROM tbd_deportista d
+  WHERE d.id_estado = 1
+    AND (d.valor_mensualidad IS NULL OR d.valor_mensualidad <= 0)
+    AND ($1::int[] IS NULL OR d.id = ANY($1))
+`, [ids])
+
+// Quita el pago a todo el alcance. No borra filas: solo vuelve a pendiente.
+const revertirMesCompleto = (mes, año, ids, runner = pool) => runner.query(`
+  UPDATE tbd_mensualidad mn
+  SET fecha_pago = NULL
+  FROM tbd_deportista d
+  WHERE d.id = mn.id_deportista
+    AND mn.mes = $1 AND mn.año = $2
+    AND mn.fecha_pago IS NOT NULL
+    AND d.id_estado = 1
+    AND ($3::int[] IS NULL OR mn.id_deportista = ANY($3))
+  RETURNING mn.id
+`, [mes, año, ids])
+
 module.exports = {
+  contarPagadasDelMes,
+  pagarExistentesDelMes,
+  crearYPagarFaltantesDelMes,
+  contarSinValorMensualidad,
+  revertirMesCompleto,
   getMatrizAnual,
   getDeportistaParaMensualidad,
   getMensualidadDePeriodo,

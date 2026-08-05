@@ -126,6 +126,64 @@ const AÑO = 2031
     rechazo.status === 409 && /valor de mensualidad/i.test(rechazo.body?.error || ''), JSON.stringify(rechazo.body))
   await pool.query('UPDATE tbd_deportista SET valor_mensualidad = $1 WHERE id = $2', [valorOriginal, otro.id])
 
+  console.log('\n--- Marcar un mes completo de un clic ---')
+  const { rows: activos } = await pool.query(
+    `SELECT COUNT(*)::int c FROM tbd_deportista WHERE id_estado = 1 AND valor_mensualidad > 0`)
+  const totalConValor = activos[0].c
+
+  check('mes inválido se rechaza', (await req('POST', '/api/mensualidades/marcar-mes', { mes: 13, año: AÑO, pagada: true }, token)).status === 400)
+  check('pagada no booleana se rechaza', (await req('POST', '/api/mensualidades/marcar-mes', { mes: 5, año: AÑO, pagada: 1 }, token)).status === 400)
+
+  // Mayo está vacío: debe crear todo desde cero.
+  const masivo = await req('POST', '/api/mensualidades/marcar-mes', { mes: 5, año: AÑO, pagada: true }, token)
+  check('marca el mes completo', masivo.status === 200, JSON.stringify(masivo.body))
+  check('marca a todos los que tienen valor definido', masivo.body?.marcadas === totalConValor,
+    `marcadas=${masivo.body?.marcadas} esperado=${totalConValor}`)
+  check('reporta que las creó', masivo.body?.creadas === totalConValor)
+
+  const m4 = await req('GET', `/api/mensualidades/anio/${AÑO}`, null, token)
+  check('la grilla muestra mayo pagado para todos',
+    m4.body.totales_por_mes[4].pagadas === totalConValor,
+    `pagadas=${m4.body.totales_por_mes[4].pagadas}`)
+
+  // Repetir no debe duplicar ni volver a contar.
+  const repetirMasivo = await req('POST', '/api/mensualidades/marcar-mes', { mes: 5, año: AÑO, pagada: true }, token)
+  check('repetir no marca nada nuevo', repetirMasivo.body?.marcadas === 0, JSON.stringify(repetirMasivo.body))
+  check('informa cuántos ya estaban', repetirMasivo.body?.ya_estaban === totalConValor)
+  const { rows: dup } = await pool.query(
+    'SELECT COUNT(*)::int c FROM tbd_mensualidad WHERE mes = 5 AND año = $1', [AÑO])
+  check('no se duplicaron filas', dup[0].c === totalConValor)
+
+  // La fecha de los ya pagados no debe pisarse.
+  const { rows: fechaPrevia } = await pool.query(
+    'SELECT fecha_pago FROM tbd_mensualidad WHERE id_deportista=$1 AND mes=5 AND año=$2', [dep.id, AÑO])
+  await new Promise(r => setTimeout(r, 1100))
+  await req('POST', '/api/mensualidades/marcar-mes', { mes: 5, año: AÑO, pagada: true }, token)
+  const { rows: fechaDespues } = await pool.query(
+    'SELECT fecha_pago FROM tbd_mensualidad WHERE id_deportista=$1 AND mes=5 AND año=$2', [dep.id, AÑO])
+  check('no pisa la fecha de pago de los que ya estaban pagados',
+    new Date(fechaPrevia[0].fecha_pago).getTime() === new Date(fechaDespues[0].fecha_pago).getTime())
+
+  // Alcance acotado a unos pocos deportistas (lo que el admin ve filtrado).
+  const { rows: algunos } = await pool.query(
+    `SELECT id FROM tbd_deportista WHERE id_estado=1 AND valor_mensualidad > 0 ORDER BY id LIMIT 3`)
+  const ids = algunos.map(r => r.id)
+  const acotado = await req('POST', '/api/mensualidades/marcar-mes',
+    { mes: 6, año: AÑO, pagada: true, ids_deportistas: ids }, token)
+  check('respeta el alcance filtrado', acotado.body?.marcadas === ids.length, JSON.stringify(acotado.body))
+  const m5 = await req('GET', `/api/mensualidades/anio/${AÑO}`, null, token)
+  check('solo esos quedaron pagados en junio', m5.body.totales_por_mes[5].pagadas === ids.length)
+
+  // Revertir el mes completo.
+  const revertirMes = await req('POST', '/api/mensualidades/marcar-mes', { mes: 5, año: AÑO, pagada: false }, token)
+  check('revierte el mes completo', revertirMes.body?.revertidas === totalConValor, JSON.stringify(revertirMes.body))
+  const m6 = await req('GET', `/api/mensualidades/anio/${AÑO}`, null, token)
+  check('mayo queda sin pagos', m6.body.totales_por_mes[4].pagadas === 0)
+  check('pero las filas siguen existiendo',
+    m6.body.deportistas.find(d => d.id_deportista === dep.id).meses[4] !== null)
+  check('revertir de nuevo no falla y no cambia nada',
+    (await req('POST', '/api/mensualidades/marcar-mes', { mes: 5, año: AÑO, pagada: false }, token)).body?.revertidas === 0)
+
   console.log('\n--- Permisos ---')
   const { rows: d3 } = await pool.query(
     `SELECT id, correo, numero_documento FROM tbd_persona
@@ -138,6 +196,9 @@ const AÑO = 2031
   check('un deportista NO puede marcar mensualidades como pagadas',
     (await req('POST', '/api/mensualidades/marcar',
       { id_deportista: dep.id, mes: 4, año: AÑO, pagada: true }, tokenDep)).status === 403)
+  check('un deportista NO puede marcar un mes completo',
+    (await req('POST', '/api/mensualidades/marcar-mes',
+      { mes: 4, año: AÑO, pagada: true }, tokenDep)).status === 403)
   check('un deportista sigue viendo su propio historial',
     (await req('GET', `/api/mensualidades/deportista/${dep.id}`, null, tokenDep)).status === 200)
 

@@ -1,4 +1,18 @@
+const pool = require('../db')
 const q = require('../queries/mensualidad.queries')
+
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+// Normaliza la lista opcional de deportistas del alcance. Devuelve null
+// cuando aplica a todos, que es lo que esperan las consultas.
+const normalizarIds = (valor) => {
+  if (!Array.isArray(valor) || valor.length === 0) return null
+  const ids = valor
+    .map(v => Number(v))
+    .filter(n => Number.isInteger(n) && n > 0)
+  return ids.length > 0 ? ids : null
+}
 
 const getMensualidades = async (req, res) => {
   try {
@@ -228,9 +242,92 @@ const marcarPeriodo = async (req, res) => {
   }
 }
 
+// POST /api/mensualidades/marcar-mes
+// { mes, año, pagada, ids_deportistas? }
+//
+// Marca (o revierte) un mes completo de una sola vez. `ids_deportistas`
+// permite acotarlo a lo que el administrador tiene filtrado en pantalla,
+// para que la acción coincida con lo que está viendo.
+const marcarMesCompleto = async (req, res) => {
+  const mes = Number(req.body?.mes)
+  const año = Number(req.body?.año)
+  const pagada = req.body?.pagada
+  const ids = normalizarIds(req.body?.ids_deportistas)
+
+  if (!Number.isInteger(mes) || mes < 1 || mes > 12) {
+    return res.status(400).json({ error: 'Mes inválido (1-12)' })
+  }
+  if (!Number.isInteger(año) || año < 2000 || año > 2100) {
+    return res.status(400).json({ error: 'Año inválido' })
+  }
+  if (typeof pagada !== 'boolean') {
+    return res.status(400).json({ error: 'El campo "pagada" debe ser true o false' })
+  }
+
+  const etiqueta = `${MESES[mes - 1]} de ${año}`
+
+  if (!pagada) {
+    try {
+      const { rows } = await q.revertirMesCompleto(mes, año, ids)
+      return res.json({
+        message: rows.length === 0
+          ? `No había pagos registrados en ${etiqueta}.`
+          : `Se quitó el pago a ${rows.length} mensualidad${rows.length === 1 ? '' : 'es'} de ${etiqueta}.`,
+        revertidas: rows.length,
+        mes, año,
+      })
+    } catch (err) {
+      return res.status(500).json({ error: err.message })
+    }
+  }
+
+  // Marcar es dos operaciones (actualizar existentes + crear faltantes):
+  // van en una transacción para que no quede a medias.
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const { rows: previas } = await q.contarPagadasDelMes(mes, año, ids, client)
+    const yaEstaban = previas[0].pagadas
+
+    const { rows: actualizadas } = await q.pagarExistentesDelMes(mes, año, ids, client)
+    const { rows: creadas } = await q.crearYPagarFaltantesDelMes(mes, año, ids, client)
+    const { rows: sinValorRows } = await q.contarSinValorMensualidad(ids, client)
+
+    await client.query('COMMIT')
+
+    const nuevas = actualizadas.length + creadas.length
+    const sinValor = sinValorRows[0].sin_valor
+
+    const partes = []
+    partes.push(nuevas === 0
+      ? `Todos ya estaban pagados en ${etiqueta}.`
+      : `Se marcaron ${nuevas} mensualidad${nuevas === 1 ? '' : 'es'} como pagadas en ${etiqueta}.`)
+    if (nuevas > 0 && yaEstaban > 0) partes.push(`${yaEstaban} ya lo estaban.`)
+    if (sinValor > 0) {
+      partes.push(`${sinValor} deportista${sinValor === 1 ? '' : 's'} quedó fuera por no tener valor de mensualidad definido.`)
+    }
+
+    res.json({
+      message: partes.join(' '),
+      marcadas: nuevas,
+      creadas: creadas.length,
+      ya_estaban: yaEstaban,
+      sin_valor: sinValor,
+      mes, año,
+    })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
+}
+
 module.exports = {
   getMatrizAnual,
   marcarPeriodo,
+  marcarMesCompleto,
   getMensualidades,
   getMensualidadById,
   getMensualidadesByDeportista,
