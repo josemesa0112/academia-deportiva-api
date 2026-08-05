@@ -116,7 +116,121 @@ const generarMes = async (req, res) => {
   }
 }
 
+// GET /api/mensualidades/anio/:año
+// Matriz para la vista de grilla: deportistas x 12 meses.
+const getMatrizAnual = async (req, res) => {
+  try {
+    const año = Number(req.params.año)
+    if (!Number.isInteger(año) || año < 2000 || año > 2100) {
+      return res.status(400).json({ error: 'Año inválido' })
+    }
+
+    const { rows } = await q.getMatrizAnual(año)
+
+    // Se normaliza a un arreglo de 12 posiciones para que el cliente no
+    // tenga que buscar el mes dentro de una lista.
+    const deportistas = rows.map(r => {
+      const meses = Array.from({ length: 12 }, () => null)
+      for (const m of r.meses) {
+        if (m.mes >= 1 && m.mes <= 12) {
+          meses[m.mes - 1] = {
+            id: m.id,
+            valor: m.valor === null ? null : Number(m.valor),
+            pagada: m.fecha_pago !== null,
+            fecha_pago: m.fecha_pago,
+          }
+        }
+      }
+      return {
+        id_deportista: r.id_deportista,
+        nombre: r.nombre,
+        apellido: r.apellido,
+        numero_documento: r.numero_documento,
+        id_categoria: r.id_categoria,
+        categoria: r.categoria,
+        valor_mensualidad: r.valor_mensualidad === null ? null : Number(r.valor_mensualidad),
+        meses,
+      }
+    })
+
+    // Totales por mes, para el pie de la grilla.
+    const totales_por_mes = Array.from({ length: 12 }, (_, i) => {
+      let pagadas = 0, pendientes = 0, recaudado = 0
+      for (const d of deportistas) {
+        const celda = d.meses[i]
+        if (!celda) continue
+        if (celda.pagada) { pagadas++; recaudado += celda.valor || 0 }
+        else pendientes++
+      }
+      return { mes: i + 1, pagadas, pendientes, recaudado }
+    })
+
+    res.json({ año, deportistas, totales_por_mes })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// POST /api/mensualidades/marcar  { id_deportista, mes, año, pagada }
+// Permite marcar o desmarcar cualquier mes del año, exista o no la fila.
+// Crear al vuelo es lo que habilita registrar pagos por adelantado.
+const marcarPeriodo = async (req, res) => {
+  try {
+    const id_deportista = Number(req.body?.id_deportista)
+    const mes = Number(req.body?.mes)
+    const año = Number(req.body?.año)
+    const pagada = req.body?.pagada
+
+    if (!Number.isInteger(id_deportista) || id_deportista < 1) {
+      return res.status(400).json({ error: 'Deportista inválido' })
+    }
+    if (!Number.isInteger(mes) || mes < 1 || mes > 12) {
+      return res.status(400).json({ error: 'Mes inválido (1-12)' })
+    }
+    if (!Number.isInteger(año) || año < 2000 || año > 2100) {
+      return res.status(400).json({ error: 'Año inválido' })
+    }
+    if (typeof pagada !== 'boolean') {
+      return res.status(400).json({ error: 'El campo "pagada" debe ser true o false' })
+    }
+
+    const { rows: deps } = await q.getDeportistaParaMensualidad(id_deportista)
+    const deportista = deps[0]
+    if (!deportista) return res.status(404).json({ error: 'Deportista no encontrado' })
+    if (deportista.id_estado !== 1) {
+      return res.status(409).json({ error: 'El deportista está inactivo' })
+    }
+
+    if (!pagada) {
+      const { rows } = await q.revertirPagoDePeriodo(id_deportista, mes, año)
+      if (!rows.length) {
+        return res.status(404).json({ error: 'No hay mensualidad registrada para ese periodo' })
+      }
+      return res.json({ message: 'Pago revertido correctamente', data: rows[0] })
+    }
+
+    // Al crear la fila hace falta un valor. Si ya existe, se respeta el suyo
+    // (puede diferir del actual si la tarifa cambió después).
+    const { rows: existentes } = await q.getMensualidadDePeriodo(id_deportista, mes, año)
+    const existente = existentes[0]
+    const valor = existente ? existente.valor : deportista.valor_mensualidad
+
+    if (!existente && (valor === null || Number(valor) <= 0)) {
+      return res.status(409).json({
+        error: `${deportista.nombre} ${deportista.apellido} no tiene valor de mensualidad definido. Asígnaselo en Deportistas antes de registrar el pago.`,
+      })
+    }
+
+    const { rows } = await q.marcarPagoDePeriodo(id_deportista, mes, año, valor)
+    res.json({ message: 'Pago registrado correctamente', data: rows[0] })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
 module.exports = {
+  getMatrizAnual,
+  marcarPeriodo,
   getMensualidades,
   getMensualidadById,
   getMensualidadesByDeportista,
