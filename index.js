@@ -39,6 +39,7 @@ app.use('/api/deportistas', requireAuth, require('./src/routes/deportista.routes
 app.use('/api/productos', requireAuth, require('./src/routes/producto.routes'))
 app.use('/api/proveedores', requireAuth, require('./src/routes/proveedor.routes'))
 app.use('/api/compras', requireAuth, require('./src/routes/compra.routes'))
+app.use('/api/gastos', requireAuth, require('./src/routes/gasto.routes'))
 app.use('/api/canchas', requireAuth, require('./src/routes/cancha.routes'))
 app.use('/api/entrenamientos', requireAuth, require('./src/routes/entrenamiento.routes'))
 app.use('/api/asistencias', requireAuth, require('./src/routes/asistencia.routes'))

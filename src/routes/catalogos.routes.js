@@ -10,5 +10,6 @@ router.get('/categorias', c.getCategorias)
 router.get('/posiciones', c.getPosiciones)
 router.get('/tipos-producto', c.getTiposProducto)
 router.get('/variantes-producto', c.getVariantesProducto)
+router.get('/tipos-gasto', c.getTiposGasto)
 
 module.exports = router

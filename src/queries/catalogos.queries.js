@@ -9,6 +9,7 @@ const getCategorias = () => pool.query('SELECT * FROM tbd_categoria ORDER BY id'
 const getPosiciones = () => pool.query('SELECT * FROM tbd_posicion ORDER BY id')
 const getTiposProducto = () => pool.query('SELECT * FROM tbd_tipo_producto ORDER BY id')
 const getVariantesProducto = () => pool.query('SELECT * FROM tbd_variante_producto ORDER BY id')
+const getTiposGasto = () => pool.query('SELECT * FROM tbd_tipo_gasto ORDER BY nombre')
 
 module.exports = {
   getEstados,
@@ -19,5 +20,6 @@ module.exports = {
   getCategorias,
   getPosiciones,
   getTiposProducto,
-  getVariantesProducto
+  getVariantesProducto,
+  getTiposGasto
 }

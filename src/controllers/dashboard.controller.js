@@ -1,4 +1,5 @@
 const q = require('../queries/dashboard.queries')
+const qGastos = require('../queries/gasto.queries')
 
 const getResumen = async (req, res) => {
   try {
@@ -17,7 +18,9 @@ const getResumen = async (req, res) => {
       recaudoAnterior,
       pendiente,
       matriculasPendientes,
-      gastos,
+      compras,
+      gastosOperativos,
+      gastosPorTipo,
       historica,
       porCategoria,
       conteos,
@@ -29,7 +32,9 @@ const getResumen = async (req, res) => {
       q.getRecaudoMes(mesAnterior, añoAnterior),
       q.getPendienteMes(mesActual, añoActual),
       q.getMatriculasPendientesTotal(),
-      q.getGastosMes(mesActual, añoActual),
+      q.getComprasMes(mesActual, añoActual),
+      qGastos.getTotalMes(mesActual, añoActual),
+      qGastos.getPorTipoMes(mesActual, añoActual),
       q.getRecaudacionHistorica(),
       q.getDeportistasPorCategoria(),
       q.getConteos(),
@@ -47,6 +52,12 @@ const getResumen = async (req, res) => {
       ? ((recaudoMes - recaudoMesAnterior) / recaudoMesAnterior) * 100
       : null
 
+    // "Gastos del mes" = compras a proveedores + egresos operativos
+    // (arriendo, servicios, nómina...). Se devuelve el total y el desglose.
+    const totalCompras = Number(compras.rows[0].total)
+    const totalGastosOperativos = Number(gastosOperativos.rows[0].total)
+    const gastosTotales = totalCompras + totalGastosOperativos
+
     const asistenciaRow = asistencia.rows[0]
     const porcentajeAsistencia = asistenciaRow.total > 0
       ? Math.round((asistenciaRow.presentes / asistenciaRow.total) * 100)
@@ -62,8 +73,16 @@ const getResumen = async (req, res) => {
         cantidad_pendientes: pendiente.rows[0].cantidad_pendientes,
         pendiente_matriculas: Number(matriculasPendientes.rows[0].pendiente),
         cantidad_pendientes_matriculas: matriculasPendientes.rows[0].cantidad_pendientes,
-        gastos: Number(gastos.rows[0].gastos),
-        cantidad_compras: gastos.rows[0].cantidad_compras,
+        gastos: gastosTotales,
+        gastos_compras: totalCompras,
+        cantidad_compras: compras.rows[0].cantidad_compras,
+        gastos_operativos: totalGastosOperativos,
+        cantidad_gastos: gastosOperativos.rows[0].cantidad,
+        gastos_por_tipo: gastosPorTipo.rows.map(r => ({
+          tipo: r.tipo,
+          total: Number(r.total),
+        })),
+        balance_mes: recaudoMes - gastosTotales,
         recaudo_mes_anterior: recaudoMesAnterior,
         cambio_porcentual: cambioPorcentual,
       },

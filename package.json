@@ -7,7 +7,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "migrar": "node scripts/migrar.cjs",
-    "test:auth": "node tests/auth.e2e.cjs"
+    "test:auth": "node tests/auth.e2e.cjs",
+    "test:gastos": "node tests/gastos.e2e.cjs"
   },
   "keywords": [],
   "author": "",

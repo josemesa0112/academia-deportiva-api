@@ -34,10 +34,11 @@ const getMatriculasPendientesTotal = () => pool.query(`
   WHERE fecha_pago IS NULL
 `)
 
-// Gastos del mes (compras del periodo)
-const getGastosMes = (mes, año) => pool.query(`
+// Compras a proveedores del periodo. Es solo una parte del egreso: el resto
+// (arriendo, servicios, nómina...) vive en tbd_gasto.
+const getComprasMes = (mes, año) => pool.query(`
   SELECT
-    COALESCE(SUM(total_compra), 0)::DECIMAL AS gastos,
+    COALESCE(SUM(total_compra), 0)::DECIMAL AS total,
     COUNT(*)::INT AS cantidad_compras
   FROM tbd_compra
   WHERE EXTRACT(MONTH FROM fecha_compra) = $1
@@ -144,7 +145,7 @@ module.exports = {
   getRecaudoMes,
   getPendienteMes,
   getMatriculasPendientesTotal,
-  getGastosMes,
+  getComprasMes,
   getRecaudacionHistorica,
   getDeportistasPorCategoria,
   getConteos,

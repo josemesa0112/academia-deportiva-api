@@ -81,6 +81,15 @@ const getVariantesProducto = async (req, res) => {
   }
 }
 
+const getTiposGasto = async (req, res) => {
+  try {
+    const { rows } = await q.getTiposGasto()
+    res.json(rows)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
 module.exports = {
   getEstados,
   getRoles,
@@ -90,5 +99,6 @@ module.exports = {
   getCategorias,
   getPosiciones,
   getTiposProducto,
-  getVariantesProducto
+  getVariantesProducto,
+  getTiposGasto
 }
