@@ -2,10 +2,13 @@ const router = require('express').Router()
 const c = require('../controllers/matricula.controller')
 const { matriculaRules } = require('../middlewares/general.validators')
 const validate = require('../middlewares/validate')
+const { requireRol } = require('../middlewares/requireAuth')
 
 router.get('/', c.getMatriculas)
 router.get('/deportista/:id_deportista', c.getMatriculasByDeportista)
 router.post('/generar-anio', c.generarAño)
+// Acción masiva sobre la cartera: solo el Administrador.
+router.post('/marcar-anio', requireRol(1), c.marcarAnioCompleto)
 router.post('/:id/pagar', c.pagarMatricula)
 router.post('/:id/revertir-pago', c.revertirPagoMatricula)
 router.get('/:id', c.getMatriculaById)
