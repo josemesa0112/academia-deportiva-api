@@ -1,0 +1,67 @@
+name: Mantener despierto (Supabase + Render)
+
+# Por qué existe:
+#   El proyecto de Supabase en plan gratuito se PAUSA tras 7 días sin
+#   peticiones, y despausarlo es manual desde el panel. Solo cuentan las
+#   peticiones que llegan desde fuera, así que un pg_cron dentro de la misma
+#   base no evita la pausa.
+#   Este workflow llama a /health/db, que hace una consulta real contra
+#   PostgreSQL. De paso despierta el backend de Render, que se duerme tras
+#   15 minutos sin tráfico.
+
+on:
+  schedule:
+    # Cada 6 horas. Suficiente margen frente a los 7 días de Supabase incluso
+    # si GitHub retrasa alguna ejecución (los cron programados no son exactos
+    # y pueden posponerse en horas de mucha carga).
+    - cron: '0 */6 * * *'
+  # Permite dispararlo a mano desde la pestaña Actions para comprobarlo.
+  workflow_dispatch:
+
+# Sin permisos de escritura: el job solo hace peticiones HTTP.
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Consultar la base a través del API
+        env:
+          # Se puede sobreescribir con una variable de repositorio
+          # (Settings > Secrets and variables > Actions > Variables)
+          # si algún día cambia la URL del backend.
+          API_URL: ${{ vars.API_URL || 'https://academia-deportiva-api-24zm.onrender.com' }}
+        run: |
+          set -euo pipefail
+
+          # Render duerme el servicio gratuito: el primer intento puede tardar
+          # hasta un minuto en arrancar, o fallar. Se reintenta con espera.
+          for intento in 1 2 3 4 5; do
+            echo "Intento $intento contra $API_URL/health/db"
+            codigo=$(curl -sS -o respuesta.json -w '%{http_code}' \
+                      --max-time 90 "$API_URL/health/db" || echo "000")
+            echo "HTTP $codigo"
+            cat respuesta.json 2>/dev/null || true
+            echo
+
+            if [ "$codigo" = "200" ]; then
+              echo "La base respondió. Supabase queda marcado como activo."
+              exit 0
+            fi
+
+            if [ "$intento" -lt 5 ]; then
+              echo "Sin éxito todavía; esperando 30 s (Render puede estar arrancando)."
+              sleep 30
+            fi
+          done
+
+          echo "::error::No se pudo consultar la base tras 5 intentos."
+          echo "Revisa que el backend de Render esté desplegado y que el"
+          echo "proyecto de Supabase no esté ya pausado."
+          exit 1

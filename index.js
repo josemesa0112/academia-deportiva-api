@@ -6,7 +6,7 @@ const compression = require('compression')
 // (ej. SUPABASE_URL de otro proyecto) se cuela y apunta la app al lugar
 // equivocado. En Render no hay archivo .env, así que no altera producción.
 require('dotenv').config({ override: true })
-require('./src/db')
+const pool = require('./src/db')
 
 const app = express()
 
@@ -19,6 +19,33 @@ app.use(express.static('public'))
 // Respuesta liviana sin tocar DB — solo confirma que el proceso responde.
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() })
+})
+
+// Health que SÍ consulta la base. Es el que mantiene despierto al proyecto
+// de Supabase: en el plan gratuito se pausa tras 7 días sin peticiones, y
+// solo cuentan las que llegan desde fuera. Un pg_cron interno no sirve.
+// Lo invoca el workflow .github/workflows/keep-alive.yml.
+app.get('/health/db', async (_req, res) => {
+  const inicio = Date.now()
+  try {
+    // Consulta trivial: no expone datos y basta como señal de actividad.
+    const { rows } = await pool.query('SELECT 1 AS ok')
+    res.json({
+      status: rows[0].ok === 1 ? 'ok' : 'degradado',
+      db: 'alcanzable',
+      latencia_ms: Date.now() - inicio,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (err) {
+    // 503 para que el monitor lo marque como caído y se note.
+    res.status(503).json({
+      status: 'error',
+      db: 'inalcanzable',
+      error: err.message,
+      latencia_ms: Date.now() - inicio,
+      timestamp: new Date().toISOString(),
+    })
+  }
 })
 
 const { requireAuth } = require('./src/middlewares/requireAuth')
