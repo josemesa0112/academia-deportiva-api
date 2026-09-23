@@ -109,13 +109,35 @@ const FECHA_HOY = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2,
   const anulado = await req('DELETE', `/api/gastos/${idGasto}`, null, token)
   check('anula el gasto', anulado.status === 200)
   const listaTrasAnular = await req('GET', '/api/gastos', null, token)
-  check('el anulado desaparece del listado', !listaTrasAnular.body.some(g => g.id === idGasto))
+  const anuladoEnLista = listaTrasAnular.body.find(g => g.id === idGasto)
+  check('el anulado sigue en el listado, para poder reactivarlo',
+    Boolean(anuladoEnLista))
+  check('y viene marcado como inactivo', Number(anuladoEnLista?.id_estado) === 2,
+    'id_estado=' + anuladoEnLista?.id_estado)
+  check('el listado trae el nombre del estado', anuladoEnLista?.estado === 'Inactivo',
+    'estado=' + anuladoEnLista?.estado)
   const { rows: sigueEnBase } = await pool.query('SELECT id_estado FROM tbd_gasto WHERE id = $1', [idGasto])
   check('pero sigue en la base con estado 2', sigueEnBase[0]?.id_estado === 2)
   const trasAnular = (await req('GET', '/api/dashboard/resumen', null, token)).body.financiero
   check('el anulado deja de sumar en el dashboard',
     Math.round(trasAnular.gastos_operativos - antes.gastos_operativos) === 1000,
     `esperado +1000, real ${trasAnular.gastos_operativos - antes.gastos_operativos}`)
+
+  console.log('\n--- Reactivar un gasto anulado ---')
+  const reactivado = await req('PUT', `/api/gastos/${idGasto}`, {
+    concepto: 'PRUEBA reactivada', id_tipo_gasto: idArriendo,
+    valor: 500, fecha: FECHA_HOY, id_estado: 1,
+  }, token)
+  check('se puede reactivar con un PUT', reactivado.status === 200, JSON.stringify(reactivado.body))
+  const { rows: trasReactivar } = await pool.query(
+    'SELECT id_estado FROM tbd_gasto WHERE id = $1', [idGasto])
+  check('queda activo de nuevo', trasReactivar[0]?.id_estado === 1)
+  const dashReactivado = (await req('GET', '/api/dashboard/resumen', null, token)).body.financiero
+  check('y vuelve a sumar en el dashboard',
+    Math.round(dashReactivado.gastos_operativos - antes.gastos_operativos) === 1500,
+    `diferencia=${dashReactivado.gastos_operativos - antes.gastos_operativos}`)
+  // Se vuelve a anular para no alterar la verificación final de limpieza.
+  await req('DELETE', `/api/gastos/${idGasto}`, null, token)
 
   console.log('\n--- Permisos por rol ---')
   const { rows: deps } = await pool.query(

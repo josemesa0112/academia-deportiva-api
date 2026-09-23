@@ -1,7 +1,8 @@
 const pool = require('../db')
 
-// Solo gastos activos por defecto: los anulados (id_estado = 2) se conservan
-// para auditoría pero no deben sumar ni aparecer en el listado.
+// Devuelve también los anulados (id_estado = 2): la interfaz los oculta de
+// entrada y ofrece un interruptor para verlos y poder reactivarlos. Los
+// totales del mes sí los excluyen (ver getTotalMes).
 const getGastos = () => pool.query(`
   SELECT g.*,
     tg.nombre AS tipo_gasto,
@@ -9,7 +10,6 @@ const getGastos = () => pool.query(`
   FROM tbd_gasto g
   LEFT JOIN tbd_tipo_gasto tg ON g.id_tipo_gasto = tg.id
   LEFT JOIN tbd_estado e ON g.id_estado = e.id
-  WHERE g.id_estado = 1
   ORDER BY g.fecha DESC, g.id DESC
 `)
 
