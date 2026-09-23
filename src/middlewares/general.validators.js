@@ -4,9 +4,15 @@ const profesorRules = [
   body('id_persona')
     .notEmpty().withMessage('La persona es obligatoria')
     .isInt({ min: 1 }).withMessage('El id de persona debe ser un número válido'),
+  // El salario fijo ya no se pide: el pago se calcula por sesiones. Se
+  // acepta si viene, por compatibilidad con registros antiguos.
   body('salario')
-    .notEmpty().withMessage('El salario es obligatorio')
+    .optional({ nullable: true, checkFalsy: true })
     .isDecimal().withMessage('El salario debe ser un número decimal válido'),
+  body('valor_sesion')
+    .notEmpty().withMessage('El valor por sesión es obligatorio')
+    .isDecimal().withMessage('El valor por sesión debe ser un número válido')
+    .custom(v => Number(v) >= 0).withMessage('El valor por sesión no puede ser negativo'),
   body('id_estado')
     .notEmpty().withMessage('El estado es obligatorio')
     .isInt({ min: 1 }).withMessage('El estado debe ser un número válido')

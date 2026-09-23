@@ -127,7 +127,57 @@ const deleteProfesor = async (req, res) => {
   }
 }
 
+// GET /api/profesores/:id/sesiones
+// Sesiones del profesor y resumen del pago. `anio` opcional para el
+// desglose mes a mes (por defecto, el año en curso).
+const getSesionesDelProfesor = async (req, res) => {
+  try {
+    const anio = req.query.anio ? Number(req.query.anio) : new Date().getFullYear()
+    if (!Number.isInteger(anio) || anio < 2000 || anio > 2100) {
+      return res.status(400).json({ error: 'Año inválido' })
+    }
+
+    const { rows: profes } = await q.getProfesorById(req.params.id)
+    if (!profes.length) return res.status(404).json({ error: 'Profesor no encontrado' })
+    const profesor = profes[0]
+
+    const [porMes, sesiones] = await Promise.all([
+      q.getSesionesPorMes(req.params.id, anio),
+      q.getSesionesDeProfesor(req.params.id),
+    ])
+
+    const valorSesion = Number(profesor.valor_sesion)
+    // Se rellenan los 12 meses para que el cliente no tenga que buscarlos.
+    const meses = Array.from({ length: 12 }, (_, i) => {
+      const fila = porMes.rows.find(r => r.mes === i + 1)
+      const dictadas = fila ? fila.dictadas : 0
+      return {
+        mes: i + 1,
+        dictadas,
+        programadas: fila ? fila.programadas : 0,
+        pago: dictadas * valorSesion,
+      }
+    })
+
+    res.json({
+      anio,
+      valor_sesion: valorSesion,
+      sesiones_dictadas: profesor.sesiones_dictadas,
+      sesiones_mes: profesor.sesiones_mes,
+      sesiones_programadas: profesor.sesiones_programadas,
+      pago_mes: Number(profesor.pago_mes),
+      pago_acumulado: Number(profesor.pago_acumulado),
+      pago_anio: meses.reduce((s, m) => s + m.pago, 0),
+      meses,
+      sesiones: sesiones.rows,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
 module.exports = {
+  getSesionesDelProfesor,
   getProfesores,
   getProfesorById,
   getCategoriasDelProfesor,

@@ -1,4 +1,14 @@
+const pool = require('../db')
 const q = require('../queries/entrenamiento.queries')
+
+// Acepta "1,2,3" o [1,2,3] y devuelve [1, 2, 3].
+const parseProfesores = (val) => {
+  if (val === null || val === undefined || val === '') return []
+  const arr = Array.isArray(val) ? val : String(val).split(',')
+  return arr
+    .map(v => Number(String(v).trim()))
+    .filter(n => Number.isInteger(n) && n > 0)
+}
 
 const getEntrenamientos = async (req, res) => {
   try {
@@ -21,21 +31,51 @@ const getEntrenamientoById = async (req, res) => {
 }
 
 const createEntrenamiento = async (req, res) => {
+  const client = await pool.connect()
   try {
-    const { rows } = await q.createEntrenamiento(req.body)
-    res.status(201).json(rows[0])
+    await client.query('BEGIN')
+    const { rows } = await q.createEntrenamiento(req.body, client)
+    const entrenamiento = rows[0]
+
+    // Los profesores asignados son los que hacen que la sesion cuente
+    // para su pago, asi que se guardan en la misma transaccion.
+    const profesores = parseProfesores(req.body.profesores)
+    if (profesores.length > 0) {
+      await q.syncProfesores(client, entrenamiento.id, profesores)
+    }
+
+    await client.query('COMMIT')
+    res.status(201).json(entrenamiento)
   } catch (err) {
+    await client.query('ROLLBACK')
     res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
   }
 }
 
 const updateEntrenamiento = async (req, res) => {
+  const client = await pool.connect()
   try {
-    const { rows } = await q.updateEntrenamiento(req.params.id, req.body)
-    if (!rows.length) return res.status(404).json({ error: 'Entrenamiento no encontrado' })
+    await client.query('BEGIN')
+    const { rows } = await q.updateEntrenamiento(req.params.id, req.body, client)
+    if (!rows.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Entrenamiento no encontrado' })
+    }
+
+    // Si no viene la propiedad, la relacion no se toca (update parcial).
+    if (req.body.profesores !== undefined) {
+      await q.syncProfesores(client, rows[0].id, parseProfesores(req.body.profesores))
+    }
+
+    await client.query('COMMIT')
     res.json(rows[0])
   } catch (err) {
+    await client.query('ROLLBACK')
     res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
   }
 }
 

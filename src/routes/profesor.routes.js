@@ -5,6 +5,7 @@ const validate = require('../middlewares/validate')
 
 router.get('/', c.getProfesores)
 router.get('/:id/categorias', c.getCategoriasDelProfesor)
+router.get('/:id/sesiones', c.getSesionesDelProfesor)
 router.get('/:id', c.getProfesorById)
 router.post('/', profesorRules, validate, c.createProfesor)
 router.put('/:id', profesorRules, validate, c.updateProfesor)
