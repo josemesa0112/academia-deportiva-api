@@ -73,6 +73,20 @@ const DOC_PRUEBA = '99999900'
 
   console.log('Autenticado como admin.\n')
 
+  console.log('--- El catálogo de clasificación es el de IMC ---')
+  const { rows: catalogo } = await pool.query(
+    'SELECT id, nombre FROM tbd_clasificacion ORDER BY id')
+  const nombres = catalogo.map(c => c.nombre).join(' | ')
+  check('el catálogo tiene las tres categorías de IMC',
+    nombres === 'Bajo en grasa | Saludable | Sobrepeso', 'catálogo=' + nombres)
+  const { rows: incoherentes } = await pool.query(`
+    SELECT COUNT(*)::int c FROM tbd_deportista
+     WHERE imc_actual IS NOT NULL
+       AND id_clasificacion IS DISTINCT FROM (CASE
+         WHEN imc_actual < 18.5 THEN 1 WHEN imc_actual < 25 THEN 2 ELSE 3 END)`)
+  check('ningún deportista quedó con clasificación incoherente',
+    incoherentes[0].c === 0, 'incoherentes=' + incoherentes[0].c)
+
   console.log('--- Crear deportista SIN datos físicos ---')
   const p1 = await crearPersona('1')
   check('se crea la persona de prueba', p1.status === 201, JSON.stringify(p1.body))
@@ -121,14 +135,13 @@ const DOC_PRUEBA = '99999900'
     [idDep2])
   check('el IMC se calcula solo', Math.abs(Number(fila2[0]?.imc_actual) - 20.76) < 0.1,
     'imc=' + fila2[0]?.imc_actual)
-  // Conocido: el catálogo tbd_clasificacion tiene Principiante/Intermedio/
-  // Avanzado, no las categorías de IMC que busca el código (saludable,
-  // sobrepeso, bajo en grasa). Por eso id_clasificacion nunca se asigna.
-  // Se deja documentado aquí para que el día que se corrija el catálogo,
-  // esta comprobación falle y avise.
-  check('la clasificación automática sigue sin asignarse (catálogo incompatible)',
-    fila2[0]?.id_clasificacion === null,
+  // IMC 20.76 cae en el rango saludable (18.5 a 24.9).
+  check('se asigna la clasificación automática', fila2[0]?.id_clasificacion !== null,
     'id_clasificacion=' + fila2[0]?.id_clasificacion)
+  const { rows: nombreClas } = await pool.query(
+    'SELECT nombre FROM tbd_clasificacion WHERE id = $1', [fila2[0]?.id_clasificacion])
+  check('y es la correcta para ese IMC', nombreClas[0]?.nombre === 'Saludable',
+    'clasificacion=' + nombreClas[0]?.nombre)
   const { rows: med2 } = await pool.query(
     'SELECT COUNT(*)::int c FROM tbd_medicion WHERE id_deportista = $1', [idDep2])
   check('sí se registra la medición inicial', med2[0].c === 1)
@@ -151,6 +164,26 @@ const DOC_PRUEBA = '99999900'
   const { rows: med3 } = await pool.query(
     'SELECT COUNT(*)::int c FROM tbd_medicion WHERE id_deportista = $1', [idDep1])
   check('ahora sí queda una medición', med3[0].c === 1)
+
+  console.log('\n--- Los tres tramos de IMC ---')
+  const tramos = [
+    { peso: 40, estatura: 1.75, esperado: 'Bajo en grasa' },  // IMC 13.1
+    { peso: 60, estatura: 1.70, esperado: 'Saludable' },      // IMC 20.8
+    { peso: 95, estatura: 1.70, esperado: 'Sobrepeso' },      // IMC 32.9
+  ]
+  for (const t of tramos) {
+    const r = await req('PUT', `/api/deportistas/${idDep2}`, {
+      id_persona: p2.body.id, id_categoria: idCategoria, id_estado: 1,
+      peso_actual: t.peso, estatura_actual: t.estatura,
+    }, token)
+    const { rows: cl } = await pool.query(
+      `SELECT c.nombre FROM tbd_deportista d
+         JOIN tbd_clasificacion c ON c.id = d.id_clasificacion
+        WHERE d.id = $1`, [idDep2])
+    check(`peso ${t.peso} y estatura ${t.estatura} -> ${t.esperado}`,
+      r.status === 200 && cl[0]?.nombre === t.esperado,
+      'recibido=' + cl[0]?.nombre)
+  }
 
   console.log('\n--- Lo que sigue siendo obligatorio ---')
   const p3 = await crearPersona('3')
