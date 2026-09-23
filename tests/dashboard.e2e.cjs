@@ -199,6 +199,83 @@ const entrar = async (documento) => {
     sinSesiones.body?.conteos?.porcentaje_asistencia === null,
     'recibido=' + sinSesiones.body?.conteos?.porcentaje_asistencia)
 
+  console.log('\n--- Alcance del deportista ---')
+  const { rows: deportistasConCat } = await pool.query(`
+    SELECT p.numero_documento, d.id, d.id_categoria
+    FROM tbd_persona p
+    JOIN tbd_deportista d ON d.id_persona = p.id
+    WHERE p.id_rol = 3 AND p.id_estado = 1 AND d.id_estado = 1
+      AND d.id_categoria IS NOT NULL
+      AND p.correo LIKE '%@ejemplo.com'
+    ORDER BY d.id LIMIT 1`)
+  const depo = deportistasConCat[0]
+  const tokenDepo = await entrar(depo.numero_documento)
+
+  const vistaDepo = await req('GET', '/api/dashboard/resumen', null, tokenDepo)
+  check('el dashboard responde 200', vistaDepo.status === 200)
+  check('el alcance es de deportista', vistaDepo.body?.conteos?.alcance === 'deportista',
+    JSON.stringify(vistaDepo.body?.conteos))
+  check('NO recibe ninguna cifra del club',
+    vistaDepo.body?.conteos?.deportistas === undefined &&
+    vistaDepo.body?.conteos?.profesores === undefined &&
+    vistaDepo.body?.conteos?.proveedores === undefined &&
+    vistaDepo.body?.conteos?.porcentaje_asistencia === undefined,
+    JSON.stringify(vistaDepo.body?.conteos))
+  check('trae el contexto de su categoría',
+    Boolean(vistaDepo.body?.contexto_deportista?.categoria),
+    JSON.stringify(vistaDepo.body?.contexto_deportista))
+  check('trae los entrenadores de su categoría',
+    Array.isArray(vistaDepo.body?.contexto_deportista?.profesores))
+
+  // Sesión futura de SU categoría y otra de una categoría distinta.
+  const { rows: otraCategoria } = await pool.query(
+    'SELECT id FROM tbd_categoria WHERE id <> $1 ORDER BY id LIMIT 1', [depo.id_categoria])
+  const manana2 = new Date(); manana2.setDate(manana2.getDate() + 1)
+
+  const suya = await req('POST', '/api/entrenamientos', {
+    id_cancha: cancha[0].id, id_categoria: depo.id_categoria,
+    hora_inicio: '07:00', hora_fin: '23:58', fecha: iso(manana2), id_estado: 1,
+    profesores: String(prof.id_profesor),
+  }, tokenAdmin)
+  const ajena2 = await req('POST', '/api/entrenamientos', {
+    id_cancha: cancha[0].id, id_categoria: otraCategoria[0].id,
+    hora_inicio: '07:30', hora_fin: '23:58', fecha: iso(manana2), id_estado: 1,
+  }, tokenAdmin)
+
+  const conSesiones2 = await req('GET', '/api/dashboard/resumen', null, tokenDepo)
+  const idsDepo = (conSesiones2.body?.proximos_entrenamientos || []).map(e => e.id)
+  check('ve el entrenamiento de su categoría', idsDepo.includes(suya.body.id),
+    'ids=' + JSON.stringify(idsDepo))
+  check('NO ve el de otra categoría', !idsDepo.includes(ajena2.body.id))
+  check('cada sesión indica quién la dirige',
+    Array.isArray(conSesiones2.body.proximos_entrenamientos.find(e => e.id === suya.body.id)?.profesores))
+
+  console.log('\n--- El deportista es de solo lectura ---')
+  const soloLectura = [
+    ['POST', '/api/entrenamientos', { id_cancha: cancha[0].id, id_categoria: depo.id_categoria, hora_inicio: '07:00', hora_fin: '23:58', fecha: iso(manana2), id_estado: 1 }],
+    ['PUT', `/api/entrenamientos/${suya.body.id}`, { id_cancha: cancha[0].id, id_categoria: depo.id_categoria, hora_inicio: '07:00', hora_fin: '23:58', fecha: iso(manana2), id_estado: 1 }],
+    ['DELETE', `/api/entrenamientos/${suya.body.id}`, null],
+    ['POST', '/api/asistencias', { id_deportista: depo.id, id_entrenamiento: suya.body.id, id_estado: 1 }],
+    ['PUT', '/api/asistencias/1', { id_deportista: depo.id, id_entrenamiento: suya.body.id, id_estado: 1 }],
+    ['DELETE', '/api/asistencias/1', null],
+    ['PUT', `/api/deportistas/${depo.id}`, { id_persona: 1, peso_actual: 50, estatura_actual: 1.6, id_categoria: depo.id_categoria, id_estado: 1 }],
+    ['DELETE', `/api/deportistas/${depo.id}`, null],
+    ['PUT', '/api/personas/1', { nombre: 'X', id_rol: 3, id_estado: 1 }],
+  ]
+  for (const [metodo, ruta, cuerpo] of soloLectura) {
+    const r = await req(metodo, ruta, cuerpo, tokenDepo)
+    check(`${metodo} ${ruta.split('?')[0]} -> 403`, r.status === 403, 'status=' + r.status)
+  }
+
+  // Nada de lo anterior debe haber alterado la base.
+  const { rows: sigueVivo } = await pool.query(
+    'SELECT id_estado FROM tbd_entrenamiento WHERE id = $1', [suya.body.id])
+  check('el entrenamiento sigue intacto tras los intentos',
+    sigueVivo[0]?.id_estado === 1)
+  const { rows: depIntacto } = await pool.query(
+    'SELECT id_estado FROM tbd_deportista WHERE id = $1', [depo.id])
+  check('el deportista sigue activo', depIntacto[0]?.id_estado === 1)
+
   console.log('\n--- La deuda de un inactivo sale de la cartera ---')
   // Deportista activo con una mensualidad pendiente creada para la prueba.
   const { rows: dep } = await pool.query(

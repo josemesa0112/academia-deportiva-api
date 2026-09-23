@@ -67,11 +67,35 @@ const getResumen = async (req, res) => {
     // Se omiten los conteos de profesores y proveedores, que no le
     // competen.
     const esProfesor = req.persona?.id_rol === 2
+    const esDeportista = req.persona?.id_rol === 3
     let conteos
+    // Solo se llena para el deportista: su categoría y quién la dirige.
+    let contextoDeportista = null
     // Por defecto, los del club; el profesor ve solo los de sus categorías.
     let proximosEntrenamientos = proximos.rows
 
-    if (esProfesor) {
+    if (esDeportista) {
+      const { rows: fichas } = await q.getDeportistaPorPersona(req.persona.id)
+      const ficha = fichas[0]
+
+      // El deportista no recibe ninguna cifra del club.
+      conteos = { alcance: 'deportista' }
+
+      if (!ficha || !ficha.id_categoria) {
+        proximosEntrenamientos = []
+        contextoDeportista = { categoria: ficha?.categoria || null, profesores: [] }
+      } else {
+        const [misEntrenamientos, susProfesores] = await Promise.all([
+          q.getProximosEntrenamientosCategoria(ficha.id_categoria),
+          q.getProfesoresDeCategoria(ficha.id_categoria),
+        ])
+        proximosEntrenamientos = misEntrenamientos.rows
+        contextoDeportista = {
+          categoria: ficha.categoria,
+          profesores: susProfesores.rows,
+        }
+      }
+    } else if (esProfesor) {
       const { rows: fichas } = await q.getProfesorPorPersona(req.persona.id)
       const idProfesor = fichas[0]?.id
 
@@ -132,6 +156,7 @@ const getResumen = async (req, res) => {
         cambio_porcentual: cambioPorcentual,
       },
       conteos,
+      contexto_deportista: contextoDeportista,
       recaudacion_historica: historica.rows.map(r => ({
         periodo: r.periodo,
         mes: r.mes,

@@ -219,7 +219,58 @@ const getProximosEntrenamientosProfesor = (id_profesor) => pool.query(`
   LIMIT 10
 `, [id_profesor])
 
+// --- Alcance del deportista -----------------------------------------------
+// Solo ve lo suyo: los próximos entrenamientos de su categoría y quién los
+// dirige. Ninguna cifra del club.
+
+const getDeportistaPorPersona = (id_persona) => pool.query(`
+  SELECT d.id, d.id_categoria, cat.nombre AS categoria
+  FROM tbd_deportista d
+  LEFT JOIN tbd_categoria cat ON cat.id = d.id_categoria
+  WHERE d.id_persona = $1 AND d.id_estado = 1
+  LIMIT 1
+`, [id_persona])
+
+// Próximos entrenamientos de una categoría, con quién los dirige.
+const getProximosEntrenamientosCategoria = (id_categoria) => pool.query(`
+  SELECT e.id, e.fecha, e.hora_inicio, e.hora_fin,
+    c.nombre AS cancha,
+    cat.nombre AS categoria,
+    COALESCE(
+      (SELECT json_agg(json_build_object('nombre', p.nombre, 'apellido', p.apellido) ORDER BY pr.id)
+       FROM tbd_entrenamiento_x_profesor exp
+       JOIN tbd_profesor pr ON pr.id = exp.id_profesor
+       LEFT JOIN tbd_persona p ON p.id = pr.id_persona
+       WHERE exp.id_entrenamiento = e.id),
+      '[]'::json
+    ) AS profesores
+  FROM tbd_entrenamiento e
+  LEFT JOIN tbd_cancha c ON e.id_cancha = c.id
+  LEFT JOIN tbd_categoria cat ON e.id_categoria = cat.id
+  WHERE e.fecha >= CURRENT_DATE
+    AND e.fecha <= CURRENT_DATE + INTERVAL '7 days'
+    AND e.id_estado = 1
+    AND e.id_categoria = $1
+  ORDER BY e.fecha, e.hora_inicio
+  LIMIT 10
+`, [id_categoria])
+
+// Entrenadores a cargo de la categoría. Se toma de la asignación de
+// categorías del profesor, no de los entrenamientos: así el deportista ve
+// a su entrenador aunque todavía no haya sesiones agendadas.
+const getProfesoresDeCategoria = (id_categoria) => pool.query(`
+  SELECT pr.id, p.nombre, p.apellido, p.correo, p.numero_telefono
+  FROM tbd_profesor_x_categoria pxc
+  JOIN tbd_profesor pr ON pr.id = pxc.id_profesor
+  LEFT JOIN tbd_persona p ON p.id = pr.id_persona
+  WHERE pxc.id_categoria = $1 AND pr.id_estado = 1
+  ORDER BY p.nombre, p.apellido
+`, [id_categoria])
+
 module.exports = {
+  getDeportistaPorPersona,
+  getProximosEntrenamientosCategoria,
+  getProfesoresDeCategoria,
   getProximosEntrenamientosProfesor,
   getProfesorPorPersona,
   getConteosProfesor,
