@@ -122,7 +122,7 @@ const MARCA = 'PRUEBA-SESIONES'
   const up = await req('PUT', `/api/profesores/${prof.id}`, {
     id_persona: base.body.id_persona, valor_sesion: 50, id_estado: 1,
   }, token)
-  check('acepta actualizar sin enviar salario fijo', up.status === 200, JSON.stringify(up.body))
+  check('actualiza la tarifa', up.status === 200, JSON.stringify(up.body))
   const tras = await req('GET', `/api/profesores/${prof.id}`, null, token)
   check('el pago se recalcula con la tarifa nueva', Number(tras.body?.pago_mes) === 100,
     'pago_mes=' + tras.body?.pago_mes)

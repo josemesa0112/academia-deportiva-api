@@ -113,23 +113,23 @@ const getCategoriasByProfesor = (id_profesor) => pool.query(`
   ORDER BY cat.id
 `, [id_profesor])
 
-// `salario` se conserva por referencia histórica; el pago real sale de
-// valor_sesion por las sesiones dictadas.
+// No existe salario fijo: el pago sale de valor_sesion por las sesiones
+// dictadas. valor_sesion cae a 40 si no se indica.
 const createProfesorRow = (data, runner = pool) => runner.query(`
-  INSERT INTO tbd_profesor (id_persona, salario, valor_sesion, id_estado)
-  VALUES ($1, $2, COALESCE($3, 40), $4)
+  INSERT INTO tbd_profesor (id_persona, valor_sesion, id_estado)
+  VALUES ($1, COALESCE($2, 40), $3)
   RETURNING *
-`, [data.id_persona, data.salario ?? null, data.valor_sesion ?? null, data.id_estado])
+`, [data.id_persona, data.valor_sesion ?? null, data.id_estado])
 
 const updateProfesorRow = (id, data, runner = pool) => runner.query(`
   UPDATE tbd_profesor SET
     id_persona = $1,
-    salario = $2,
-    valor_sesion = COALESCE($3, valor_sesion),
-    id_estado = $4
-  WHERE id = $5
+    -- COALESCE para no pisar la tarifa en updates parciales.
+    valor_sesion = COALESCE($2, valor_sesion),
+    id_estado = $3
+  WHERE id = $4
   RETURNING *
-`, [data.id_persona, data.salario ?? null, data.valor_sesion ?? null, data.id_estado, id])
+`, [data.id_persona, data.valor_sesion ?? null, data.id_estado, id])
 
 const deleteProfesor = (id) => pool.query(`
   UPDATE tbd_profesor SET id_estado = 2 WHERE id = $1 RETURNING *

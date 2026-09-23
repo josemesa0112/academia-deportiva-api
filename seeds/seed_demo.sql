@@ -341,7 +341,7 @@ BEGIN
        v_genero, v_tipo_cc, v_rol_profesor, v_estado_activo)
     RETURNING id INTO v_persona_id;
 
-    INSERT INTO tbd_profesor (id_persona, salario, id_estado)
+    INSERT INTO tbd_profesor (id_persona, valor_sesion, id_estado)
     VALUES (v_persona_id, 1500000 + floor(random() * 1500000)::INT, v_estado_activo);
   END LOOP;
 
