@@ -18,12 +18,19 @@ const deportistaRules = [
   body('id_persona')
     .notEmpty().withMessage('La persona es obligatoria')
     .isInt({ min: 1 }).withMessage('El id de persona debe ser un número válido'),
+  // Los datos físicos son opcionales: se puede matricular a un deportista
+  // y tomarle las medidas después. Si vienen, se validan.
   body('peso_actual')
-    .notEmpty().withMessage('El peso es obligatorio')
-    .isDecimal().withMessage('El peso debe ser un número decimal válido'),
+    .optional({ nullable: true, checkFalsy: true })
+    .isDecimal().withMessage('El peso debe ser un número decimal válido')
+    .custom(v => Number(v) > 0).withMessage('El peso debe ser mayor que cero'),
   body('estatura_actual')
-    .notEmpty().withMessage('La estatura es obligatoria')
-    .isDecimal().withMessage('La estatura debe ser un número decimal válido'),
+    .optional({ nullable: true, checkFalsy: true })
+    .isDecimal().withMessage('La estatura debe ser un número decimal válido')
+    .custom(v => Number(v) > 0).withMessage('La estatura debe ser mayor que cero'),
+  body('porcentaje_grasa_actual')
+    .optional({ nullable: true, checkFalsy: true })
+    .isDecimal().withMessage('El porcentaje de grasa debe ser un número válido'),
   body('id_categoria')
     .notEmpty().withMessage('La categoría es obligatoria')
     .isInt({ min: 1 }).withMessage('La categoría debe ser un número válido'),

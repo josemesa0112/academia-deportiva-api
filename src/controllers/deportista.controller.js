@@ -47,6 +47,17 @@ const buscarIdClasificacion = async (client, nombre) => {
   return rows.length > 0 ? rows[0].id : null
 }
 
+// Normaliza las medidas: con el físico opcional, un 0 que llegue por API no
+// es un dato real sino ausencia de dato. Se guarda como null para no
+// ensuciar la ficha ni la gráfica de evolución.
+const normalizarMedidas = (body) => {
+  for (const k of ['peso_actual', 'estatura_actual', 'porcentaje_grasa_actual']) {
+    if (body[k] === '' || body[k] === null || body[k] === undefined) { body[k] = null; continue }
+    const n = Number(body[k])
+    if (!Number.isFinite(n) || n <= 0) body[k] = null
+  }
+}
+
 // Sobrescribe IMC_actual e id_clasificacion en el body según peso/estatura.
 // Es la fuente única de verdad: lo que envíe el cliente para estos campos se ignora.
 const aplicarClasificacionAuto = async (client, body) => {
@@ -69,6 +80,12 @@ const medidasCambiaron = (prev, next) => {
     return Number(a) !== Number(b)
   })
 }
+
+// ¿El body trae alguna medida? Con el físico opcional puede no traer nada,
+// y una medición con todo en null solo ensucia el historial y la gráfica.
+const hayMedidas = (body) => [
+  'peso_actual', 'estatura_actual', 'IMC_actual', 'porcentaje_grasa_actual',
+].some(k => body[k] !== null && body[k] !== undefined && body[k] !== '')
 
 // Inserta una fila en tbd_medicion usando los valores que vienen en el body
 const insertMedicion = (client, id_deportista, body) => client.query(`
@@ -130,6 +147,7 @@ const createDeportista = async (req, res) => {
     await client.query('BEGIN')
 
     // Deriva IMC + clasificación a partir de peso/estatura (sobrescribe lo que envíe el cliente)
+    normalizarMedidas(req.body)
     await aplicarClasificacionAuto(client, req.body)
 
     const { rows } = await q.createDeportistaRow(req.body, client)
@@ -140,8 +158,11 @@ const createDeportista = async (req, res) => {
       await syncPosiciones(client, deportista.id, posiciones)
     }
 
-    // Medición inicial: registra el estado físico al momento de crear
-    await insertMedicion(client, deportista.id, req.body)
+    // Medición inicial: solo si se registraron medidas. Sin datos físicos
+    // no se crea una fila vacía.
+    if (hayMedidas(req.body)) {
+      await insertMedicion(client, deportista.id, req.body)
+    }
 
     await client.query('COMMIT')
     res.status(201).json(deportista)
@@ -167,6 +188,7 @@ const updateDeportista = async (req, res) => {
     const previas = snapshotRows[0]
 
     // Deriva IMC + clasificación a partir de peso/estatura (sobrescribe lo que envíe el cliente)
+    normalizarMedidas(req.body)
     await aplicarClasificacionAuto(client, req.body)
 
     const { rows } = await q.updateDeportistaRow(req.params.id, req.body, client)

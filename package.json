@@ -12,7 +12,8 @@
     "test:mensualidades": "node tests/mensualidades.e2e.cjs",
     "test:matriculas": "node tests/matriculas.e2e.cjs",
     "test:profesores": "node tests/profesores.e2e.cjs",
-    "test:dashboard": "node tests/dashboard.e2e.cjs"
+    "test:dashboard": "node tests/dashboard.e2e.cjs",
+    "test:deportistas": "node tests/deportistas.e2e.cjs"
   },
   "keywords": [],
   "author": "",
