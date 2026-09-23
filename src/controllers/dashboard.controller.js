@@ -68,6 +68,8 @@ const getResumen = async (req, res) => {
     // competen.
     const esProfesor = req.persona?.id_rol === 2
     let conteos
+    // Por defecto, los del club; el profesor ve solo los de sus categorías.
+    let proximosEntrenamientos = proximos.rows
 
     if (esProfesor) {
       const { rows: fichas } = await q.getProfesorPorPersona(req.persona.id)
@@ -76,16 +78,19 @@ const getResumen = async (req, res) => {
       if (!idProfesor) {
         // Persona con rol Profesor pero sin ficha creada todavía.
         conteos = { alcance: 'profesor', deportistas: 0, porcentaje_asistencia: null }
+        proximosEntrenamientos = []
       } else {
-        const [misDeportistas, miAsistencia] = await Promise.all([
+        const [misDeportistas, miAsistencia, misProximos] = await Promise.all([
           q.getConteosProfesor(idProfesor),
           q.getAsistenciaProfesor(idProfesor),
+          q.getProximosEntrenamientosProfesor(idProfesor),
         ])
         conteos = {
           alcance: 'profesor',
           deportistas: misDeportistas.rows[0].deportistas,
           porcentaje_asistencia: porcentaje(miAsistencia.rows[0]),
         }
+        proximosEntrenamientos = misProximos.rows
       }
     } else {
       conteos = {
@@ -129,7 +134,7 @@ const getResumen = async (req, res) => {
       })),
       deportistas_por_categoria: porCategoria.rows,
       cumpleanos_del_mes: cumpleanos.rows,
-      proximos_entrenamientos: proximos.rows,
+      proximos_entrenamientos: proximosEntrenamientos,
     })
   } catch (err) {
     console.error('[dashboard/resumen] error:', err)

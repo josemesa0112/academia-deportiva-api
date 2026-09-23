@@ -175,7 +175,35 @@ const getAsistenciaProfesor = (id_profesor) => pool.query(`
     AND e.fecha <= CURRENT_DATE
 `, [id_profesor])
 
+// Próximos entrenamientos acotados a las categorías del profesor. Se
+// filtra por categoría y no por asignación: un entrenamiento de su
+// categoría que todavía no tiene profesor asignado igual le interesa,
+// y desaparecería si el filtro fuera por asignación.
+// `asignado` indica si además le corresponde dictarlo.
+const getProximosEntrenamientosProfesor = (id_profesor) => pool.query(`
+  SELECT e.id, e.fecha, e.hora_inicio, e.hora_fin,
+    c.nombre AS cancha,
+    cat.nombre AS categoria,
+    EXISTS (
+      SELECT 1 FROM tbd_entrenamiento_x_profesor exp
+       WHERE exp.id_entrenamiento = e.id AND exp.id_profesor = $1
+    ) AS asignado
+  FROM tbd_entrenamiento e
+  LEFT JOIN tbd_cancha c ON e.id_cancha = c.id
+  LEFT JOIN tbd_categoria cat ON e.id_categoria = cat.id
+  WHERE e.fecha >= CURRENT_DATE
+    AND e.fecha <= CURRENT_DATE + INTERVAL '7 days'
+    AND e.id_estado = 1
+    AND e.id_categoria IN (
+      SELECT pxc.id_categoria FROM tbd_profesor_x_categoria pxc
+       WHERE pxc.id_profesor = $1
+    )
+  ORDER BY e.fecha, e.hora_inicio
+  LIMIT 10
+`, [id_profesor])
+
 module.exports = {
+  getProximosEntrenamientosProfesor,
   getProfesorPorPersona,
   getConteosProfesor,
   getAsistenciaProfesor,

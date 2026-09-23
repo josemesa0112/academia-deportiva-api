@@ -156,6 +156,41 @@ const entrar = async (documento) => {
     adminConAsistencia.body?.conteos?.porcentaje_asistencia !== 67,
     'admin=' + adminConAsistencia.body?.conteos?.porcentaje_asistencia)
 
+  console.log('\n--- Próximos entrenamientos acotados ---')
+  // Una sesión futura en OTRA categoría, que el profesor no debe ver.
+  const { rows: otraCat } = await pool.query(
+    'SELECT id FROM tbd_categoria WHERE id <> $1 ORDER BY id LIMIT 1', [idCategoria])
+  const manana = new Date(); manana.setDate(manana.getDate() + 1)
+
+  const miFutura = await req('POST', '/api/entrenamientos', {
+    id_cancha: cancha[0].id, id_categoria: idCategoria,
+    hora_inicio: '10:00', hora_fin: '23:58', fecha: iso(manana), id_estado: 1,
+    profesores: String(prof.id_profesor),
+  }, tokenAdmin)
+  check('se crea una sesión futura de su categoría', miFutura.status === 201)
+
+  const ajenaFutura = await req('POST', '/api/entrenamientos', {
+    id_cancha: cancha[0].id, id_categoria: otraCat[0].id,
+    hora_inicio: '11:00', hora_fin: '23:58', fecha: iso(manana), id_estado: 1,
+  }, tokenAdmin)
+  check('se crea una sesión futura de otra categoría', ajenaFutura.status === 201)
+
+  const conProximos = await req('GET', '/api/dashboard/resumen', null, tokenProfe)
+  const idsProfe = (conProximos.body?.proximos_entrenamientos || []).map(e => e.id)
+  check('ve la sesión futura de su categoría', idsProfe.includes(miFutura.body.id),
+    'ids=' + JSON.stringify(idsProfe))
+  check('NO ve la de otra categoría', !idsProfe.includes(ajenaFutura.body.id))
+  check('marca cuál le toca dictar',
+    conProximos.body.proximos_entrenamientos.find(e => e.id === miFutura.body.id)?.asignado === true)
+
+  const adminProximos = await req('GET', '/api/dashboard/resumen', null, tokenAdmin)
+  const idsAdmin = (adminProximos.body?.proximos_entrenamientos || []).map(e => e.id)
+  check('el admin sí ve ambas',
+    idsAdmin.includes(miFutura.body.id) && idsAdmin.includes(ajenaFutura.body.id),
+    'ids=' + JSON.stringify(idsAdmin))
+  check('y al admin no se le manda el campo asignado',
+    adminProximos.body.proximos_entrenamientos.every(e => e.asignado === undefined))
+
   console.log('\n--- Sin sesiones no hay porcentaje inventado ---')
   await pool.query(
     'DELETE FROM tbd_entrenamiento_x_profesor WHERE id_entrenamiento = $1', [miSesion.body.id])
