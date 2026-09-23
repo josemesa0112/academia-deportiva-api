@@ -77,9 +77,22 @@ const MARCA = 'PRUEBA-SESIONES'
 
   const base = await req('GET', `/api/profesores/${prof.id}`, null, token)
   check('el profesor expone valor_sesion', Number(base.body?.valor_sesion) === 40, JSON.stringify(base.body?.valor_sesion))
-  check('expone el conteo de sesiones', base.body?.sesiones_dictadas === 0 && base.body?.sesiones_mes === 0,
+  check('expone el conteo de sesiones',
+    typeof base.body?.sesiones_dictadas === 'number' && typeof base.body?.sesiones_mes === 'number',
     JSON.stringify({ d: base.body?.sesiones_dictadas, m: base.body?.sesiones_mes }))
-  check('sin sesiones el pago es cero', Number(base.body?.pago_mes) === 0)
+
+  // Linea base: el profesor puede tener sesiones reales ya asignadas, asi
+  // que todo lo que sigue se mide como diferencia, no como valor absoluto.
+  const b0 = {
+    dictadas: base.body.sesiones_dictadas,
+    mes: base.body.sesiones_mes,
+    programadas: base.body.sesiones_programadas,
+  }
+  const { rows: enlacesBase } = await pool.query(
+    'SELECT COUNT(*)::int c FROM tbd_entrenamiento_x_profesor WHERE id_profesor = $1', [prof.id])
+  const enlaces0 = enlacesBase[0].c
+  check('el pago inicial concuerda con su linea base',
+    Number(base.body?.pago_mes) === b0.mes * 40, `pago=${base.body?.pago_mes} mes=${b0.mes}`)
 
   console.log('\n--- Asignar sesiones dictadas ---')
   const hoy = new Date()
@@ -106,17 +119,20 @@ const MARCA = 'PRUEBA-SESIONES'
 
   const { rows: enlaces } = await pool.query(
     'SELECT COUNT(*)::int c FROM tbd_entrenamiento_x_profesor WHERE id_profesor = $1', [prof.id])
-  check('los tres quedaron enlazados al profesor', enlaces[0].c === 3, 'enlaces=' + enlaces[0].c)
+  check('los tres quedaron enlazados al profesor', enlaces[0].c === enlaces0 + 3,
+    `enlaces=${enlaces[0].c} base=${enlaces0}`)
 
   console.log('\n--- El cálculo ---')
   const conSesiones = await req('GET', `/api/profesores/${prof.id}`, null, token)
   const b = conSesiones.body
-  check('cuenta 2 sesiones dictadas (no la futura)', b?.sesiones_dictadas === 2,
-    JSON.stringify({ dictadas: b?.sesiones_dictadas, programadas: b?.sesiones_programadas }))
-  check('cuenta 1 sesión programada', b?.sesiones_programadas === 1)
-  check('sesiones del mes = 2', b?.sesiones_mes === 2)
-  check('pago del mes = 2 x 40 = 80', Number(b?.pago_mes) === 80, 'pago_mes=' + b?.pago_mes)
-  check('pago acumulado = 80', Number(b?.pago_acumulado) === 80)
+  check('suma 2 sesiones dictadas (no la futura)', b?.sesiones_dictadas === b0.dictadas + 2,
+    JSON.stringify({ dictadas: b?.sesiones_dictadas, base: b0.dictadas }))
+  check('suma 1 sesión programada', b?.sesiones_programadas === b0.programadas + 1)
+  check('suma 2 sesiones al mes', b?.sesiones_mes === b0.mes + 2)
+  check('el pago del mes es sesiones x 40', Number(b?.pago_mes) === (b0.mes + 2) * 40,
+    'pago_mes=' + b?.pago_mes)
+  check('el pago acumulado es dictadas x 40',
+    Number(b?.pago_acumulado) === (b0.dictadas + 2) * 40)
 
   console.log('\n--- Cambiar la tarifa recalcula ---')
   const up = await req('PUT', `/api/profesores/${prof.id}`, {
@@ -124,7 +140,7 @@ const MARCA = 'PRUEBA-SESIONES'
   }, token)
   check('actualiza la tarifa', up.status === 200, JSON.stringify(up.body))
   const tras = await req('GET', `/api/profesores/${prof.id}`, null, token)
-  check('el pago se recalcula con la tarifa nueva', Number(tras.body?.pago_mes) === 100,
+  check('el pago se recalcula con la tarifa nueva', Number(tras.body?.pago_mes) === (b0.mes + 2) * 50,
     'pago_mes=' + tras.body?.pago_mes)
 
   console.log('\n--- Validaciones ---')
@@ -138,9 +154,9 @@ const MARCA = 'PRUEBA-SESIONES'
   console.log('\n--- Anular una sesión la descuenta ---')
   await pool.query('UPDATE tbd_entrenamiento SET id_estado = 2 WHERE id = $1', [e1.body.id])
   const trasAnular = await req('GET', `/api/profesores/${prof.id}`, null, token)
-  check('una sesión anulada deja de contar', trasAnular.body?.sesiones_dictadas === 1,
+  check('una sesión anulada deja de contar', trasAnular.body?.sesiones_dictadas === b0.dictadas + 1,
     'dictadas=' + trasAnular.body?.sesiones_dictadas)
-  check('y el pago baja a 50', Number(trasAnular.body?.pago_mes) === 50)
+  check('y el pago baja en una sesión', Number(trasAnular.body?.pago_mes) === (b0.mes + 1) * 50)
   await pool.query('UPDATE tbd_entrenamiento SET id_estado = 1 WHERE id = $1', [e1.body.id])
 
   console.log('\n--- Sincronización al editar el entrenamiento ---')
@@ -151,7 +167,7 @@ const MARCA = 'PRUEBA-SESIONES'
   }, token)
   check('quitar el profesor del entrenamiento funciona', quitar.status === 200, JSON.stringify(quitar.body))
   const sinProf = await req('GET', `/api/profesores/${prof.id}`, null, token)
-  check('la sesión deja de contarle', sinProf.body?.sesiones_dictadas === 1,
+  check('la sesión deja de contarle', sinProf.body?.sesiones_dictadas === b0.dictadas + 1,
     'dictadas=' + sinProf.body?.sesiones_dictadas)
 
   const reasignar = await req('PUT', `/api/entrenamientos/${e1.body.id}`, {
@@ -168,16 +184,17 @@ const MARCA = 'PRUEBA-SESIONES'
   console.log('\n--- El listado y el desglose mensual ---')
   const lista = await req('GET', '/api/profesores', null, token)
   const enLista = lista.body.find(p => p.id === prof.id)
-  check('el listado trae el pago calculado', Number(enLista?.pago_mes) === 100,
+  check('el listado trae el pago calculado', Number(enLista?.pago_mes) === (b0.mes + 2) * 50,
     'pago_mes=' + enLista?.pago_mes)
 
   const detalle = await req('GET', `/api/profesores/${prof.id}/sesiones`, null, token)
   check('el detalle responde 200', detalle.status === 200, JSON.stringify(detalle.body).slice(0, 120))
   check('trae los 12 meses', detalle.body?.meses?.length === 12)
   const mesActual = detalle.body.meses[hoy.getMonth()]
-  check('el mes actual cuadra con el pago', mesActual?.pago === 100,
+  check('el mes actual cuadra con el pago', mesActual?.pago === (b0.mes + 2) * 50,
     JSON.stringify(mesActual))
-  check('lista las sesiones individuales', Array.isArray(detalle.body?.sesiones) && detalle.body.sesiones.length === 3,
+  check('lista las sesiones individuales',
+    Array.isArray(detalle.body?.sesiones) && detalle.body.sesiones.length === enlaces0 + 3,
     'sesiones=' + detalle.body?.sesiones?.length)
 
   console.log('\n--- Permisos ---')

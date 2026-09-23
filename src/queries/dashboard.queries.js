@@ -141,7 +141,44 @@ const getProximosEntrenamientos = () => pool.query(`
   LIMIT 10
 `)
 
+// --- Alcance del profesor -------------------------------------------------
+// Un profesor no ve cifras globales del club: solo lo que tiene a cargo.
+
+// El token resuelve la persona; de ahí se llega a su ficha de profesor.
+const getProfesorPorPersona = (id_persona) => pool.query(`
+  SELECT id FROM tbd_profesor WHERE id_persona = $1 AND id_estado = 1 LIMIT 1
+`, [id_persona])
+
+// Deportistas activos de las categorías asignadas al profesor.
+const getConteosProfesor = (id_profesor) => pool.query(`
+  SELECT COUNT(*)::INT AS deportistas
+  FROM tbd_deportista d
+  WHERE d.id_estado = 1
+    AND d.id_categoria IN (
+      SELECT pxc.id_categoria FROM tbd_profesor_x_categoria pxc
+       WHERE pxc.id_profesor = $1
+    )
+`, [id_profesor])
+
+// Asistencia de las últimas 4 semanas, contada solo sobre los
+// entrenamientos que el profesor tiene asignados.
+const getAsistenciaProfesor = (id_profesor) => pool.query(`
+  SELECT
+    COUNT(*) FILTER (WHERE a.id_estado = 1)::INT AS presentes,
+    COUNT(*)::INT AS total
+  FROM tbd_asistencia a
+  JOIN tbd_entrenamiento e ON a.id_entrenamiento = e.id
+  JOIN tbd_entrenamiento_x_profesor exp ON exp.id_entrenamiento = e.id
+  WHERE exp.id_profesor = $1
+    AND e.id_estado = 1
+    AND e.fecha >= CURRENT_DATE - INTERVAL '28 days'
+    AND e.fecha <= CURRENT_DATE
+`, [id_profesor])
+
 module.exports = {
+  getProfesorPorPersona,
+  getConteosProfesor,
+  getAsistenciaProfesor,
   getRecaudoMes,
   getPendienteMes,
   getMatriculasPendientesTotal,

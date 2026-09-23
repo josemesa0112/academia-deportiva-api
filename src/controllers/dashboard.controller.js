@@ -23,7 +23,7 @@ const getResumen = async (req, res) => {
       gastosPorTipo,
       historica,
       porCategoria,
-      conteos,
+      conteosRows,
       asistencia,
       cumpleanos,
       proximos,
@@ -58,10 +58,44 @@ const getResumen = async (req, res) => {
     const totalGastosOperativos = Number(gastosOperativos.rows[0].total)
     const gastosTotales = totalCompras + totalGastosOperativos
 
-    const asistenciaRow = asistencia.rows[0]
-    const porcentajeAsistencia = asistenciaRow.total > 0
-      ? Math.round((asistenciaRow.presentes / asistenciaRow.total) * 100)
-      : null
+    const porcentaje = (row) => (row && row.total > 0
+      ? Math.round((row.presentes / row.total) * 100)
+      : null)
+
+    // El profesor ve su propio alcance, no las cifras del club: los
+    // deportistas de sus categorías y la asistencia de SUS sesiones.
+    // Se omiten los conteos de profesores y proveedores, que no le
+    // competen.
+    const esProfesor = req.persona?.id_rol === 2
+    let conteos
+
+    if (esProfesor) {
+      const { rows: fichas } = await q.getProfesorPorPersona(req.persona.id)
+      const idProfesor = fichas[0]?.id
+
+      if (!idProfesor) {
+        // Persona con rol Profesor pero sin ficha creada todavía.
+        conteos = { alcance: 'profesor', deportistas: 0, porcentaje_asistencia: null }
+      } else {
+        const [misDeportistas, miAsistencia] = await Promise.all([
+          q.getConteosProfesor(idProfesor),
+          q.getAsistenciaProfesor(idProfesor),
+        ])
+        conteos = {
+          alcance: 'profesor',
+          deportistas: misDeportistas.rows[0].deportistas,
+          porcentaje_asistencia: porcentaje(miAsistencia.rows[0]),
+        }
+      }
+    } else {
+      conteos = {
+        alcance: 'club',
+        deportistas: conteosRows.rows[0].deportistas,
+        profesores: conteosRows.rows[0].profesores,
+        proveedores: conteosRows.rows[0].proveedores,
+        porcentaje_asistencia: porcentaje(asistencia.rows[0]),
+      }
+    }
 
     res.json({
       periodo: { mes: mesActual, año: añoActual },
@@ -86,12 +120,7 @@ const getResumen = async (req, res) => {
         recaudo_mes_anterior: recaudoMesAnterior,
         cambio_porcentual: cambioPorcentual,
       },
-      conteos: {
-        deportistas: conteos.rows[0].deportistas,
-        profesores: conteos.rows[0].profesores,
-        proveedores: conteos.rows[0].proveedores,
-        porcentaje_asistencia: porcentajeAsistencia,
-      },
+      conteos,
       recaudacion_historica: historica.rows.map(r => ({
         periodo: r.periodo,
         mes: r.mes,
