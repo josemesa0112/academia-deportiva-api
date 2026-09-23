@@ -110,8 +110,14 @@ const getResumen = async (req, res) => {
         recaudo_matriculas: Number(recaudoActual.rows[0].recaudo_matriculas),
         pendiente: Number(pendiente.rows[0].pendiente),
         cantidad_pendientes: pendiente.rows[0].cantidad_pendientes,
+        // Deuda de deportistas inactivos: se informa aparte, fuera de la
+        // cartera, para que no se pierda de vista sin inflar la cifra.
+        pendiente_inactivos: Number(pendiente.rows[0].pendiente_inactivos),
+        cantidad_pendientes_inactivos: pendiente.rows[0].cantidad_inactivos,
         pendiente_matriculas: Number(matriculasPendientes.rows[0].pendiente),
         cantidad_pendientes_matriculas: matriculasPendientes.rows[0].cantidad_pendientes,
+        pendiente_matriculas_inactivos: Number(matriculasPendientes.rows[0].pendiente_inactivos),
+        cantidad_pendientes_matriculas_inactivos: matriculasPendientes.rows[0].cantidad_inactivos,
         gastos: gastosTotales,
         gastos_compras: totalCompras,
         cantidad_compras: compras.rows[0].cantidad_compras,

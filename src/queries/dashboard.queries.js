@@ -15,23 +15,40 @@ const getRecaudoMes = (mes, año) => pool.query(`
     ), 0)::DECIMAL AS recaudo_matriculas
 `, [mes, año])
 
-// Pendiente por cobrar del mes (mensualidades del mes sin pagar)
+// Pendiente por cobrar del mes (mensualidades del mes sin pagar).
+//
+// La deuda de un deportista inactivo NO entra en la cartera: no se sabe si
+// se va a cobrar, y arrastrarla mes a mes infla la cifra de forma
+// permanente. El registro se conserva y se sigue viendo en Mensualidades;
+// si el deportista se reactiva, vuelve a contar solo (el filtro es sobre
+// el estado actual). Se devuelve aparte para no perderla de vista.
 const getPendienteMes = (mes, año) => pool.query(`
   SELECT
-    COALESCE(SUM(valor), 0)::DECIMAL AS pendiente,
-    COUNT(*)::INT AS cantidad_pendientes
-  FROM tbd_mensualidad
-  WHERE mes = $1 AND año = $2 AND fecha_pago IS NULL
+    COALESCE(SUM(mn.valor) FILTER (WHERE d.id_estado = 1), 0)::DECIMAL AS pendiente,
+    COUNT(*) FILTER (WHERE d.id_estado = 1)::INT AS cantidad_pendientes,
+    COALESCE(SUM(mn.valor) FILTER (WHERE d.id_estado <> 1), 0)::DECIMAL AS pendiente_inactivos,
+    COUNT(*) FILTER (WHERE d.id_estado <> 1)::INT AS cantidad_inactivos
+  FROM tbd_mensualidad mn
+  JOIN tbd_deportista d ON d.id = mn.id_deportista
+  WHERE mn.mes = $1 AND mn.año = $2
+    AND mn.fecha_pago IS NULL
+    AND mn.id_estado = 1
 `, [mes, año])
 
 // Matrículas pendientes (TODAS sin pagar, sin filtro de mes — una
 // matrícula vieja sin pagar sigue siendo dinero por cobrar).
+// Mismo criterio que las mensualidades: las de deportistas inactivos se
+// separan para no inflar la cartera.
 const getMatriculasPendientesTotal = () => pool.query(`
   SELECT
-    COALESCE(SUM(valor), 0)::DECIMAL AS pendiente,
-    COUNT(*)::INT AS cantidad_pendientes
-  FROM tbd_matricula
-  WHERE fecha_pago IS NULL
+    COALESCE(SUM(mt.valor) FILTER (WHERE d.id_estado = 1), 0)::DECIMAL AS pendiente,
+    COUNT(*) FILTER (WHERE d.id_estado = 1)::INT AS cantidad_pendientes,
+    COALESCE(SUM(mt.valor) FILTER (WHERE d.id_estado <> 1), 0)::DECIMAL AS pendiente_inactivos,
+    COUNT(*) FILTER (WHERE d.id_estado <> 1)::INT AS cantidad_inactivos
+  FROM tbd_matricula mt
+  JOIN tbd_deportista d ON d.id = mt.id_deportista
+  WHERE mt.fecha_pago IS NULL
+    AND mt.id_estado = 1
 `)
 
 // Compras a proveedores del periodo. Es solo una parte del egreso: el resto

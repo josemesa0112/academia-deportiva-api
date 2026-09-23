@@ -199,6 +199,86 @@ const entrar = async (documento) => {
     sinSesiones.body?.conteos?.porcentaje_asistencia === null,
     'recibido=' + sinSesiones.body?.conteos?.porcentaje_asistencia)
 
+  console.log('\n--- La deuda de un inactivo sale de la cartera ---')
+  // Deportista activo con una mensualidad pendiente creada para la prueba.
+  const { rows: dep } = await pool.query(
+    'SELECT id, valor_mensualidad FROM tbd_deportista WHERE id_estado = 1 AND valor_mensualidad > 0 ORDER BY id LIMIT 1')
+  const idDep = dep[0].id
+  const VALOR = 333333
+  // Mes/año artificiales no sirven: la cartera mira el mes en curso.
+  const ahora = new Date()
+  const mesActual = ahora.getMonth() + 1
+  const anioActual = ahora.getFullYear()
+
+  const { rows: previa } = await pool.query(
+    'SELECT id, valor, fecha_pago FROM tbd_mensualidad WHERE id_deportista=$1 AND mes=$2 AND año=$3',
+    [idDep, mesActual, anioActual])
+  // Se guarda el estado original para restaurarlo al final.
+  const teniaMensualidad = previa.length > 0
+  const valorPrevio = teniaMensualidad ? previa[0].valor : null
+  const pagoPrevio = teniaMensualidad ? previa[0].fecha_pago : null
+
+  if (teniaMensualidad) {
+    await pool.query('UPDATE tbd_mensualidad SET valor=$1, fecha_pago=NULL WHERE id=$2', [VALOR, previa[0].id])
+  } else {
+    await pool.query(
+      'INSERT INTO tbd_mensualidad (id_deportista, mes, año, valor, id_estado, fecha_pago) VALUES ($1,$2,$3,$4,1,NULL)',
+      [idDep, mesActual, anioActual, VALOR])
+  }
+
+  const conActivo = (await req('GET', '/api/dashboard/resumen', null, tokenAdmin)).body.financiero
+  check('con el deportista activo, su deuda está en la cartera',
+    conActivo.pendiente >= VALOR, `pendiente=${conActivo.pendiente}`)
+  // La base ya puede tener deuda de inactivos reales: se mide la diferencia.
+  const baseInactivos = Number(conActivo.pendiente_inactivos)
+  check('la deuda de este deportista aun no cuenta como de inactivo',
+    typeof conActivo.pendiente_inactivos === "number",
+    `base=${baseInactivos}`)
+
+  // Se desactiva el deportista.
+  await pool.query('UPDATE tbd_deportista SET id_estado = 2 WHERE id = $1', [idDep])
+  const conInactivo = (await req('GET', '/api/dashboard/resumen', null, tokenAdmin)).body.financiero
+  check('al desactivarlo, la cartera baja exactamente en su deuda',
+    Math.round(conActivo.pendiente - conInactivo.pendiente) === VALOR,
+    `antes=${conActivo.pendiente} despues=${conInactivo.pendiente}`)
+  check('la deuda no desaparece: se informa aparte',
+    Math.round(conInactivo.pendiente_inactivos - baseInactivos) === VALOR,
+    `inactivos=${conInactivo.pendiente_inactivos} base=${baseInactivos}`)
+  check('y baja el conteo de mensualidades pendientes',
+    conInactivo.cantidad_pendientes === conActivo.cantidad_pendientes - 1)
+
+  const { rows: sigue } = await pool.query(
+    'SELECT fecha_pago FROM tbd_mensualidad WHERE id_deportista=$1 AND mes=$2 AND año=$3',
+    [idDep, mesActual, anioActual])
+  check('el registro sigue existiendo y sin pagar',
+    sigue.length === 1 && sigue[0].fecha_pago === null)
+
+  // Se reactiva: la deuda debe volver a la cartera sola.
+  await pool.query('UPDATE tbd_deportista SET id_estado = 1 WHERE id = $1', [idDep])
+  const reactivado = (await req('GET', '/api/dashboard/resumen', null, tokenAdmin)).body.financiero
+  check('al reactivarlo la deuda vuelve a la cartera',
+    Math.round(reactivado.pendiente) === Math.round(conActivo.pendiente),
+    `esperado=${conActivo.pendiente} real=${reactivado.pendiente}`)
+  check('y deja de contarse como deuda de inactivos',
+    Math.round(reactivado.pendiente_inactivos) === Math.round(baseInactivos),
+    `real=${reactivado.pendiente_inactivos} base=${baseInactivos}`)
+
+  // Restaurar la mensualidad tal como estaba.
+  if (teniaMensualidad) {
+    await pool.query('UPDATE tbd_mensualidad SET valor=$1, fecha_pago=$2 WHERE id=$3',
+      [valorPrevio, pagoPrevio, previa[0].id])
+  } else {
+    await pool.query('DELETE FROM tbd_mensualidad WHERE id_deportista=$1 AND mes=$2 AND año=$3',
+      [idDep, mesActual, anioActual])
+  }
+  const { rows: restaurada } = await pool.query(
+    'SELECT valor, fecha_pago FROM tbd_mensualidad WHERE id_deportista=$1 AND mes=$2 AND año=$3',
+    [idDep, mesActual, anioActual])
+  check('la mensualidad quedó como estaba',
+    teniaMensualidad
+      ? (restaurada.length === 1 && String(restaurada[0].valor) === String(valorPrevio))
+      : restaurada.length === 0)
+
   // Limpieza
   await limpiar()
   await pool.query('UPDATE tbd_persona SET debe_cambiar_password = TRUE WHERE id_rol IN (1,2)')
